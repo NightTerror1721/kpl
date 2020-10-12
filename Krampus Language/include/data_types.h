@@ -15,26 +15,141 @@ namespace kpl
 		Boolean,
 		String,
 
-		Callable,
-
 		Array,
+
+		List,
 
 		Object,
 
-		Userdata
+		Callable,
+
+		Userdata,
+		Internal
 	};
+
+
+	namespace type
+	{
+		class Null;
+		class Integer;
+		class Float;
+		class Boolean;
+		class String;
+		class Array;
+		class List;
+		class Object;
+		class Callable;
+		class Userdata;
+	}
 
 
 	class Value
 	{
 	private:
-		DataType _type;
+		mutable struct {
+			Size size;
+			Offset next;
+			Offset prev;
+			UInt32 refs;
+		} _header;
+
+	private:
+		const DataType _type;
 
 	protected:
-		constexpr Value(DataType type) : _type{ type } {}
+#pragma warning(push)
+#pragma warning(disable : 26495)
+		inline Value(DataType type) : _type{ type } {}
+#pragma warning(pop)
+
+	public:
+		Value(const Value&) = delete;
+		Value(Value&&) noexcept = delete;
+
+		Value& operator= (const Value&) = delete;
+		Value& operator= (Value&&) noexcept = delete;
 
 	public:
 		inline DataType type() const { return _type; }
+
+		void increase_refcount() const;
+		void decrease_refcount() const;
+
+		std::string to_string();
+
+	public:
+		friend class MemoryHeap;
+	};
+
+	namespace type::literal
+	{
+		extern Value* const Null;
+		extern Value* const True;
+		extern Value* const False;
+	}
+}
+
+
+
+namespace kpl
+{
+	class ValueReference
+	{
+	private:
+		Value* _value;
+
+	public:
+		inline ValueReference() : _value{ nullptr } {}
+		inline ValueReference(decltype(nullptr)) : _value{} {}
+		inline ValueReference(Value* value) : _value{ value } { if (value) value->increase_refcount(); }
+		inline ValueReference(const ValueReference& ref) : _value{ ref._value } { if (_value) _value->increase_refcount(); }
+		inline ValueReference(ValueReference&& ref) noexcept : _value{ ref._value } { ref._value = nullptr; }
+		inline ~ValueReference() { if (_value) _value->decrease_refcount(); _value = nullptr; }
+
+		inline ValueReference& operator= (Value* value)
+		{
+			if (_value)
+				_value->decrease_refcount();
+			_value = value;
+			if (value)
+				value->increase_refcount();
+			return *this;
+		}
+		inline ValueReference& operator= (const ValueReference& right)
+		{
+			if (_value)
+				_value->decrease_refcount();
+			_value = right._value;
+			if (_value)
+				_value->increase_refcount();
+			return *this;
+		}
+		inline ValueReference& operator= (ValueReference&& right) noexcept
+		{
+			if (_value)
+				_value->decrease_refcount();
+			_value = right._value;
+			right._value = nullptr;
+			return *this;
+		}
+		inline ValueReference& operator= (decltype(nullptr))
+		{
+			if (_value)
+			{
+				_value->decrease_refcount();
+				_value = nullptr;
+			}
+			return *this;
+		}
+
+		inline operator Value* () const { return _value ? _value : type::literal::Null; }
+		inline operator const Value* () const { return _value ? _value : type::literal::Null; }
+
+		inline Value* operator-> () { return _value ? _value : type::literal::Null; }
+		inline const Value* operator-> () const { return _value ? _value : type::literal::Null; }
+
+		inline operator bool() const { return _value; }
+		inline bool operator! () const { return !_value; }
 	};
 }
 
@@ -45,15 +160,20 @@ namespace kpl::type
 	class Null : public Value
 	{
 	public:
-		constexpr Null() : Value{ DataType::Null } {}
-		constexpr Null(const Null&) : Value{ DataType::Null } {}
-		constexpr Null(Null&&) noexcept : Value{ DataType::Null } {}
+		Null(const Null&) = delete;
+		Null(Null&&) noexcept = delete;
 
-		constexpr Null& operator= (const Null&) { return *this; }
-		constexpr Null& operator= (Null&&) noexcept { return *this; }
+		Null& operator= (const Null&) = delete;
+		Null& operator= (Null&&) = delete;
+
+	private:
+		inline Null() : Value{ DataType::Null } {}
+
+	public:
+		static const Null instance;
+
+		friend class Value;
 	};
-
-	namespace constant { static constexpr Null null; }
 }
 
 
@@ -66,13 +186,15 @@ namespace kpl::type
 		Int64 _value;
 
 	public:
-		constexpr Integer() : Value{ DataType::Integer }, _value{ 0 } {}
-		constexpr Integer(Int64 value) : Value{ DataType::Integer }, _value{ value } {}
-		constexpr Integer(const Integer& v) : Value{ DataType::Integer }, _value{ v._value } {}
-		constexpr Integer(Integer&& v) noexcept : Value{ DataType::Integer }, _value{ v._value } {}
+		inline Integer() : Value{ DataType::Integer }, _value{ 0 } {}
+		inline Integer(Int64 value) : Value{ DataType::Integer }, _value{ value } {}
+		Integer(const Integer&) = delete;
+		Integer(Integer&&) noexcept = delete;
 
-		constexpr Integer& operator= (const Integer& right) { return _value = right._value, *this; }
-		constexpr Integer& operator= (Integer&& right) noexcept { return _value = right._value, *this; }
+		Integer& operator= (const Integer&) = delete;
+		Integer& operator= (Integer&&) noexcept = delete;
+
+		friend class Value;
 	};
 }
 
@@ -86,13 +208,15 @@ namespace kpl::type
 		double _value;
 
 	public:
-		constexpr Float() : Value{ DataType::Float }, _value{ 0 } {}
-		constexpr Float(double value) : Value{ DataType::Float }, _value{ value } {}
-		constexpr Float(const Float& v) : Value{ DataType::Float }, _value{ v._value } {}
-		constexpr Float(Float&& v) noexcept : Value{ DataType::Float }, _value{ v._value } {}
+		inline Float() : Value{ DataType::Float }, _value{ 0 } {}
+		inline Float(double value) : Value{ DataType::Float }, _value{ value } {}
+		Float(const Float&) = delete;
+		Float(Float&&) noexcept = delete;
 
-		constexpr Float& operator= (const Float& right) { return _value = right._value, *this; }
-		constexpr Float& operator= (Float&& right) noexcept { return _value = right._value, *this; }
+		Float& operator= (const Float&) = delete;
+		Float& operator= (Float&&) = delete;
+
+		friend class Value;
 	};
 }
 
@@ -106,16 +230,21 @@ namespace kpl::type
 		bool _state;
 
 	public:
-		constexpr Boolean() : Value{ DataType::Boolean }, _state{ 0 } {}
-		constexpr Boolean(bool state) : Value{ DataType::Boolean }, _state{ state } {}
-		constexpr Boolean(const Boolean& s) : Value{ DataType::Boolean }, _state{ s._state } {}
-		constexpr Boolean(Boolean&& s) noexcept : Value{ DataType::Boolean }, _state{ s._state } {}
+		Boolean(const Boolean&) = delete;
+		Boolean(Boolean&&) noexcept = delete;
 
-		constexpr Boolean& operator= (const Boolean right) { return _state = right._state, *this; }
-		constexpr Boolean& operator= (Boolean&& right) noexcept { return _state = right._state, *this; }
+		Boolean& operator= (const Boolean) = delete;
+		Boolean& operator= (Boolean&&) noexcept = delete;
+
+	private:
+		inline Boolean(bool state) : Value{ DataType::Boolean }, _state{ state } {}
+
+	public:
+		static const Boolean true_instance;
+		static const Boolean false_instance;
+
+		friend class Value;
 	};
-
-	namespace constant { static constexpr Boolean True, False; }
 }
 
 
@@ -125,27 +254,207 @@ namespace kpl::type
 	class String : public Value
 	{
 	private:
-		MemoryHeap* _heap;
-		char* _str;
+		const char* _str;
 		Size _size;
-		Int64 _hashcode;
+		mutable Int64 _hashcode;
 
 	public:
-		String(MemoryHeap* heap, const char* const str, Size len);
-		String(const String& str);
-		String(String&& str) noexcept;
+		String(const char* str_addr, Size str_size);
+		String(const String&) = delete;
+		String(String&&) noexcept = delete;
 
-		String& operator= (const String& right);
-		String& operator= (String&& right) noexcept;
+		String& operator= (const String&) = delete;
+		String& operator= (String&&) noexcept = delete;
 
-		inline String(MemoryHeap* heap) :
+		inline String() :
 			Value{ DataType::String },
-			_heap{ heap },
 			_str{ nullptr },
 			_size{ 0 },
 			_hashcode{ 0 }
 		{}
-		inline String(MemoryHeap* heap, const char* const str) : String{ heap, str, std::strlen(str) } {}
-		inline String(MemoryHeap* heap, const std::string& str) : String{ heap, str.c_str(), str.size() } {}
+
+		Int64 hashcode() const;
+
+		String* copy(MemoryHeap* heap) const;
+
+		friend class Value;
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class Array : public Value
+	{
+	private:
+		ValueReference* _array;
+		Size _size;
+
+	public:
+		Array(ValueReference* array_addr, Size array_size);
+		Array(const Array&) = delete;
+		Array(Array&&) noexcept = delete;
+
+		Array& operator= (const Array&) = delete;
+		Array& operator= (Array&&) noexcept = delete;
+
+		inline Array() :
+			Value{ DataType::Array },
+			_array{ nullptr },
+			_size{ 0 }
+		{}
+
+	public:
+		inline Size length() const { return _size; }
+
+		inline void set(Offset index, Value* value) { _array[index] = value; }
+		inline Value* get(Offset index) { return _array[index]; }
+
+		friend class Value;
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class List : public Value
+	{
+	private:
+		struct Node : public Value
+		{
+			ValueReference value;
+			Node* next;
+			Node* prev;
+
+			inline Node(Value* value = nullptr, Node* next = nullptr, Node* prev = nullptr) :
+				Value{ DataType::Internal },
+				value{ value ? value : literal::Null },
+				next{ next },
+				prev{ prev }
+			{
+				increase_refcount();
+			};
+
+			Node(const Node&) = delete;
+			Node(Node&&) noexcept = delete;
+			Node& operator= (const Node&) = delete;
+			Node& operator= (Node&&) noexcept = delete;
+
+			inline Value* safe_value() { return !value ? literal::Null : static_cast<Value*>(value); }
+		};
+
+	private:
+		MemoryHeap* _heap;
+		Node* _front;
+		Node* _back;
+		Size _size;
+
+	public:
+		List(const List&) = delete;
+		List(List&&) noexcept = delete;
+
+		List& operator= (const List&) = delete;
+		List& operator= (List&&) noexcept = delete;
+
+		inline List(MemoryHeap* heap) :
+			Value{ DataType::List },
+			_heap{ heap },
+			_front{ nullptr },
+			_back{ nullptr },
+			_size{ 0 }
+		{}
+
+	public:
+		void push_back(Value* value);
+		void push_front(Value* value);
+		void insert(Offset index, Value* value);
+		void set(Offset index, Value* value);
+
+		//Value* contains(Value* value) const;
+
+		Value* get(Offset index) const;
+
+		Value* erase(Offset index);
+		//Value* erase(Value* value);
+		void clear();
+
+		//Value* index_of(Value* value) const;
+
+	public:
+		inline ~List() { clear(); }
+
+		inline bool empty() const { return !_front; }
+		inline Size size() const { return _size; }
+
+		inline Value* front() const { return _front ? _front->value : nullptr; }
+		inline Value* back() const { return _back ? _back->value : nullptr; }
+
+	private:
+		Node* make_node(Value* value, Node* next = nullptr, Node* prev = nullptr);
+		void delete_node(Node* node);
+		Node* find_node(Offset index) const;
+
+	public:
+		friend class Value;
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class Object : public Value
+	{
+	private:
+		struct Entry : public Value
+		{
+			String* const name;
+			ValueReference value;
+
+			Entry(const Entry&) = delete;
+			Entry(Entry&&) noexcept = delete;
+
+			Entry& operator= (const Entry&) = delete;
+			Entry& operator= (Entry&&) noexcept = delete;
+
+			Entry(MemoryHeap* heap, const Value* name, Value* value);
+		};
+
+		struct Table : public Value
+		{
+			MemoryHeap* const heap;
+			Entry** const entries;
+			Size const size;
+
+			Table(const Table&) = delete;
+			Table(Table&&) noexcept = delete;
+
+			Table& operator= (const Table&) = delete;
+			Table& operator= (Table&&) noexcept = delete;
+
+			Table(MemoryHeap* heap, Entry** entries, Size size);
+		};
+
+	private:
+		MemoryHeap* _heap;
+
+	public:
+		Object(const Object&) = delete;
+		Object(Object&&) noexcept = delete;
+
+		Object& operator= (const Object&) = delete;
+		Object& operator= (Object&&) noexcept = delete;
+
+	private:
+		Entry* make_entry(const Value* name, Value* value);
+		void delete_entry(Entry* entry);
+
+		Table* make_table(Size size);
+		void delete_table(Table* table);
+
+	public:
+		friend class Value;
 	};
 }

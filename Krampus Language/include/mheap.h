@@ -5,21 +5,10 @@
 
 namespace kpl
 {
-	struct MemoryHeapHeader
-	{
-		Size size;
-		Offset next;
-		Offset prev;
-		UInt32 refs;
-	};
-
 	class MemoryHeap
 	{
 	private:
-		using Header = MemoryHeapHeader;
-
 		static constexpr Size max_dup_size = 1024 * 1024 * 512;
-		static constexpr Size header_size = sizeof(Header);
 
 	public:
 		static constexpr Size default_capacity = 1024 * 32;
@@ -27,8 +16,8 @@ namespace kpl
 		static constexpr Size default_max_capacity = 1024 * 1024 * 8;
 
 	private:
-		Header* _head;
-		Header* _tail;
+		Value* _head;
+		Value* _tail;
 		Offset _offset;
 		Size _capacity;
 		Size _minCapacity;
@@ -50,129 +39,84 @@ namespace kpl
 
 		void garbage_collector();
 
-		static inline MemoryHeapHeader* get_header(void* ptr) { return reinterpret_cast<Header*>(ptr) - 1; }
-		static inline const MemoryHeapHeader* get_header(const void* ptr) { return reinterpret_cast<const Header*>(ptr) - 1; }
-
-		static void increase_reference(Value* const ptr);
-		static void decrease_reference(Value* const ptr);
-
 	private:
 		void ensure_capacity(Size capacity);
 		bool check_free_space(Size size);
 
-		inline Header* get_header(Offset offset)
+		void destroy_object(Value* const obj);
+
+		inline Value* get_value(Offset offset)
 		{
-			return offset == utils::invalid_offset ? nullptr : utils::at_offset<Header>(_data, offset);
+			return offset == utils::invalid_offset ? nullptr : utils::at_offset<Value>(_data, offset);
 		}
 
-		inline Offset header_offset(Header* header)
+		inline Offset value_offset(Value* value)
 		{
-			return !header ? utils::invalid_offset : utils::offset_of(_data, header);
+			return !value ? utils::invalid_offset : utils::offset_of(_data, value);
 		}
 
-		inline Header* next_header(Header* header)
+		inline Value* next_value(Value* value)
 		{
-			return header->next == utils::invalid_offset ? nullptr : utils::at_offset<Header>(_data, header->next);
+			return value->_header.next == utils::invalid_offset ? nullptr : utils::at_offset<Value>(_data, value->_header.next);
 		}
-		inline Header* prev_header(Header* header)
+		inline Value* prev_value(Value* value)
 		{
-			return header->prev == utils::invalid_offset ? nullptr : utils::at_offset<Header>(_data, header->prev);
+			return value->_header.prev == utils::invalid_offset ? nullptr : utils::at_offset<Value>(_data, value->_header.prev);
+		}
+
+		template<typename _Ty>
+		requires std::derived_from<_Ty, Value>
+		inline _Ty* make_instance() { return reinterpret_cast<_Ty*>(malloc(sizeof(_Ty))); }
+
+		template<typename _Ty, typename _ExtraTy = void>
+		requires std::derived_from<_Ty, Value>
+		inline _Ty* make_instance(Size extra_size, _ExtraTy** extra)
+		{
+			_Ty* obj = reinterpret_cast<_Ty*>(malloc(sizeof(_Ty) + extra_size));
+			return *extra = reinterpret_cast<_ExtraTy*>(reinterpret_cast<Byte*>(obj) + sizeof(_Ty)), obj;
+		}
+
+		template<typename _Ty>
+		requires std::derived_from<_Ty, Value>
+		inline _Ty* construct_instance() { return __KPL_CONSTRUCT(reinterpret_cast<_Ty*>(malloc(sizeof(_Ty))), _Ty); }
+
+		template<typename _Ty, typename _ArgTy>
+		requires std::derived_from<_Ty, Value>
+		inline _Ty* construct_instance(_ArgTy arg)
+		{
+			return __KPL_CONSTRUCT(reinterpret_cast<_Ty*>(malloc(sizeof(_Ty))), _Ty, arg);
 		}
 
 	public:
-		static inline type::Null* literal_null() { const_cast<type::Null*>(&type::constant::null); }
-
-		static inline type::Boolean* literal_boolean(bool state)
-		{
-			return const_cast<type::Boolean*>(state ? &type::constant::True : &type::constant::False);
-		}
-
-	public:
-		inline type::Null* make_null() { return const_cast<type::Null*>(&type::constant::null); }
+		inline type::Null* make_null() { return reinterpret_cast<type::Null*>(type::literal::Null); }
 
 		inline type::Boolean* make_boolean(bool state)
 		{
-			return const_cast<type::Boolean*>(state ? &type::constant::True : &type::constant::False);
+			return reinterpret_cast<type::Boolean*>(state ? type::literal::True : type::literal::False);
 		}
 
 		template<std::integral _Ty>
 		inline type::Integer* make_integer(_Ty value)
 		{
-			type::Integer* obj = reinterpret_cast<type::Integer*>(malloc(sizeof(type::Integer)));
+			type::Integer* obj = make_instance<type::Integer>();
 
 			if constexpr (std::same_as<_Ty, Int64>)
-				return __KPL_CONSTRUCT(obj, type::Integer, value), obj;
-			else return __KPL_CONSTRUCT(obj, type::Integer, static_cast<Int64>(value)), obj;
+				return construct_instance<type::Integer, Int64>(value);
+			else return construct_instance<type::Integer>(static_cast<Int64>(value));
 		}
 		inline type::Integer* make_integer() { return make_integer<Int64>(0); }
 
-		inline type::Float* make_float(double value = 0)
-		{
-			type::Float* obj = reinterpret_cast<type::Float*>(malloc(sizeof(type::Float)));
-			return __KPL_CONSTRUCT(obj, type::Float, value), obj;
-		}
-		inline type::Float* make_float(float value) { return make_float(static_cast<double>(value)); }
-	};
-}
+		inline type::Float* make_float(double value = 0) { return construct_instance<type::Float>(value); }
+		inline type::Float* make_float(float value) { return construct_instance<type::Float>(static_cast<double>(value)); }
 
-namespace kpl
-{
-	class ValueReference
-	{
-	private:
-		Value* _value;
+		type::String* make_string(const char* str, Size length);
 
-	public:
-		inline ValueReference() : _value{ nullptr } {}
-		inline ValueReference(decltype(nullptr)) : _value{} {}
-		inline ValueReference(Value* value) : _value{ value } { if (value) MemoryHeap::increase_reference(value); }
-		inline ValueReference(const ValueReference& ref) : _value{ ref._value } { if (_value) MemoryHeap::increase_reference(_value); }
-		inline ValueReference(ValueReference&& ref) noexcept : _value{ ref._value } { ref._value = nullptr; }
-		inline ~ValueReference() { if (_value) MemoryHeap::decrease_reference(_value); _value = nullptr; }
+		inline type::String* make_string(const char* str) { return make_string(str, std::strlen(str)); }
+		inline type::String* make_string(const std::string& str) { return make_string(str.c_str(), str.size()); }
+		inline type::String* make_string() { return make_string(nullptr, 0); }
 
-		inline ValueReference& operator= (Value* value)
-		{
-			if (_value)
-				MemoryHeap::decrease_reference(_value);
-			_value = value;
-			if (value)
-				MemoryHeap::increase_reference(value);
-			return *this;
-		}
-		inline ValueReference& operator= (const ValueReference& right)
-		{
-			if (_value)
-				MemoryHeap::decrease_reference(_value);
-			_value = right._value;
-			if (_value)
-				MemoryHeap::increase_reference(_value);
-			return *this;
-		}
-		inline ValueReference& operator= (ValueReference&& right) noexcept
-		{
-			if (_value)
-				MemoryHeap::decrease_reference(_value);
-			_value = right._value;
-			right._value = nullptr;
-			return *this;
-		}
-		inline ValueReference& operator= (decltype(nullptr))
-		{
-			if (_value)
-			{
-				MemoryHeap::decrease_reference(_value);
-				_value = nullptr;
-			}
-			return *this;
-		}
+		type::Array* make_array(Size length);
 
-		inline operator Value* () const { return _value; }
-		inline operator const Value* () const { return _value; }
-
-		inline Value* operator-> () { return _value; }
-		inline const Value* operator-> () const { return _value; }
-
-		inline operator bool() const { return _value; }
-		inline bool operator! () const { return !_value; }
+		inline type::List* make_list() { return construct_instance<type::List>(this); }
 	};
 }

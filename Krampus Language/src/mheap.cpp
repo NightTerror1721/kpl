@@ -61,8 +61,8 @@ namespace kpl
 				utils::free(_data);
 				_data = newdata;
 				_capacity = capacity;
-				_head = utils::addr_diff_add<Header>(_data, head_off);
-				_tail = utils::addr_diff_add<Header>(_data, tail_off);
+				_head = utils::addr_diff_add<Value>(_data, head_off);
+				_tail = utils::addr_diff_add<Value>(_data, tail_off);
 
 				if (_capacity > _offset)
 					_offset = _capacity;
@@ -88,58 +88,64 @@ namespace kpl
 
 	Value* MemoryHeap::malloc(Size size)
 	{
-		Size realsize = size + header_size;
-
-		if (!check_free_space(realsize))
+		if (!check_free_space(size))
 			return nullptr;
 
-		Header* header = get_header(_offset);
-		header->size = size;
-		header->refs = 0;
-		header->next = utils::invalid_offset;
-		header->prev = header_offset(_tail);
+		Value* value = get_value(_offset);
+		value->_header.size = size;
+		value->_header.refs = 0;
+		value->_header.next = utils::invalid_offset;
+		value->_header.prev = value_offset(_tail);
 
 		if (!_head)
-			_head = _tail = header;
+			_head = _tail = value;
 		else
 		{
-			_tail->next = header_offset(header);
-			_tail = header;
+			_tail->_header.next = value_offset(value);
+			_tail = value;
 		}
 
-		_offset += realsize;
+		_offset += size;
 
-		return reinterpret_cast<Value*>(header + 1);
+		return value;
 	}
 
-	void MemoryHeap::free(Value* ptr)
+	void MemoryHeap::free(Value* value)
 	{
-		Header* header = get_header(ptr);
-		Header* next = next_header(header), *prev = prev_header(header);
+		Value* next = next_value(value), *prev = prev_value(value);
+
+		destroy_object(value);
 		
-		if (header == _head)
+		if (value == _head)
 		{
 			if (next)
 			{
-				next->prev = utils::invalid_offset;
+				next->_header.prev = utils::invalid_offset;
 				_head = next;
 			}
 			else _head = _tail = nullptr;
 		}
-		else if (header == _tail)
+		else if (value == _tail)
 		{
 			if (prev)
 			{
-				prev->next = utils::invalid_offset;
+				prev->_header.next = utils::invalid_offset;
 				_tail = prev;
 			}
 			else _head = _tail = nullptr;
 		}
 		else
 		{
-			prev->next = header_offset(next);
-			next->prev = header_offset(prev);
+			prev->_header.next = value_offset(next);
+			next->_header.prev = value_offset(prev);
 		}
+	}
+
+	void MemoryHeap::destroy_object(Value* const obj)
+	{
+		/*switch (obj->type())
+		{
+		}*/
 	}
 
 	void MemoryHeap::garbage_collector()
@@ -148,37 +154,37 @@ namespace kpl
 			return;
 
 		Offset offset = 0;
-		Header* header = _head;
-		Header* head = nullptr;
-		Header* tail = nullptr;
-		Header* next_header_pos = header;
+		Value* value = _head;
+		Value* head = nullptr;
+		Value* tail = nullptr;
+		Value* next_value_pos = value;
 		bool first = true;
 
-		while (header)
+		while (value)
 		{
-			if (header->refs > 0)
+			if (value->_header.refs > 0)
 			{
-				if (header < next_header_pos)
+				if (value < next_value_pos)
 				{
-					std::memcpy(next_header_pos, header, header_size + header->size);
-					header = next_header_pos;
+					std::memcpy(next_value_pos, value, value->_header.size);
+					value = next_value_pos;
 				}
 				if (first)
 				{
 					first = false;
-					head = header;
+					head = value;
 				}
 
-				offset = header_size + header->size;
-				next_header_pos = utils::at_offset<Header>(next_header_pos, header_size + header->size);
-				tail = header;
-				header = next_header(header);
+				offset += value->_header.size;
+				next_value_pos = utils::at_offset<Value>(next_value_pos, value->_header.size);
+				tail = value;
+				value = next_value(value);
 			}
 			else
 			{
-				Header* to_delete = header;
-				header = next_header(header);
-				free(reinterpret_cast<Value*>(to_delete + 1));
+				Value* to_delete = value;
+				value = next_value(value);
+				free(to_delete);
 			}
 		}
 
@@ -187,31 +193,39 @@ namespace kpl
 		_offset = offset;
 	}
 
-	void MemoryHeap::increase_reference(Value* const ptr)
-	{
-		switch (ptr->type())
-		{
-			case DataType::Null:
-			case DataType::Boolean:
-				return;
-		}
 
-		Header* header = get_header(ptr);
-		if (header->refs < static_cast<decltype(header->refs)>(-1))
-			++header->refs;
+	type::String* MemoryHeap::make_string(const char* cstr, Size length)
+	{
+		type::String* obj;
+		if (length == 0)
+		{
+			obj = construct_instance<type::String>();
+		}
+		else
+		{
+			const char* str;
+			obj = make_instance<type::String>(length, &str);
+			__KPL_CONSTRUCT(obj, type::String, str, length);
+			std::memcpy(const_cast<char*>(str), cstr, length);
+		}
+		return obj;
 	}
 
-	void MemoryHeap::decrease_reference(Value* const ptr)
+	type::Array* MemoryHeap::make_array(Size length)
 	{
-		switch (ptr->type())
+		type::Array* obj;
+		if (length == 0)
 		{
-			case DataType::Null:
-			case DataType::Boolean:
-				return;
+			obj = construct_instance<type::Array>();
 		}
-
-		Header* header = get_header(ptr);
-		if (header->refs > 0)
-			--header->refs;
+		else
+		{
+			ValueReference* array;
+			obj = make_instance<type::Array>(sizeof(ValueReference) * length, &array);
+			for (Offset i = 0; i < length; i++)
+				__KPL_CONSTRUCT(array + i, ValueReference);
+			__KPL_CONSTRUCT(obj, type::Array, array, length);
+		}
+		return obj;
 	}
 }
