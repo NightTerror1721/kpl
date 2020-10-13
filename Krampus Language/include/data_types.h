@@ -75,7 +75,7 @@ namespace kpl
 		void increase_refcount() const;
 		void decrease_refcount() const;
 
-		std::string to_string();
+		std::string to_string() const;
 
 	public:
 		friend class MemoryHeap;
@@ -277,6 +277,16 @@ namespace kpl::type
 
 		String* copy(MemoryHeap* heap) const;
 
+		inline int compare(const String* str) const { return std::strncmp(_str, str->_str, std::min(_size, str->_size)); }
+		inline int compare(const std::string& str) const { return std::strncmp(_str, str.data(), std::min(_size, str.size())); }
+		inline int compare(const char* str) const { return std::strncmp(_str, str, std::min(_size, std::strlen(str))); }
+		inline int compare(const char* str, Size len) const { return std::strncmp(_str, str, std::min(_size, len)); }
+
+	public:
+		static Int64 hashcode(const std::string& str);
+		static inline Int64 hashcode(const char* str, Size len) { return hashcode(std::string{ str, len }); }
+		static inline Int64 hashcode(const char* str) { return hashcode(std::string{ str }); }
+
 		friend class Value;
 	};
 }
@@ -410,8 +420,9 @@ namespace kpl::type
 	private:
 		struct Entry : public Value
 		{
-			String* const name;
+			String* name;
 			ValueReference value;
+			Entry* next;
 
 			Entry(const Entry&) = delete;
 			Entry(Entry&&) noexcept = delete;
@@ -419,7 +430,7 @@ namespace kpl::type
 			Entry& operator= (const Entry&) = delete;
 			Entry& operator= (Entry&&) noexcept = delete;
 
-			Entry(MemoryHeap* heap, const Value* name, Value* value);
+			Entry(MemoryHeap* heap, const std::string& name, Value* value, Entry* next);
 		};
 
 		struct Table : public Value
@@ -435,10 +446,35 @@ namespace kpl::type
 			Table& operator= (Table&&) noexcept = delete;
 
 			Table(MemoryHeap* heap, Entry** entries, Size size);
+
+			Value* insert(Object* object, const Value* name, Value* value);
+			Value* insert(Object* object, const std::string& name, Value* value);
+			Value* insert(Object* object, const char* name, Value* value);
+
+			void move(Entry* old_entry);
+
+			Entry* find(const Value* name);
+			Entry* find(const char* name);
+			Entry* find(const std::string& name);
+
+			void remove(Object* object, const Value* name);
+			void remove(Object* object, const char* name);
+			void remove(Object* object, const std::string& name);
+
+			void delete_node(Object* object, Offset node_idx);
+
+			inline Offset hash(const std::string& str) { return static_cast<Offset>(String::hashcode(str) % size); }
+			inline Offset hash(const String* str) { return static_cast<Offset>(str->hashcode() % size); }
 		};
 
 	private:
-		MemoryHeap* _heap;
+		static constexpr int default_capacity = 16;
+
+	private:
+		MemoryHeap* const _heap;
+		Table* _table;
+		Size _size;
+		Value* const _class;
 
 	public:
 		Object(const Object&) = delete;
@@ -447,14 +483,46 @@ namespace kpl::type
 		Object& operator= (const Object&) = delete;
 		Object& operator= (Object&&) noexcept = delete;
 
+	public:
+		Object(MemoryHeap* heap, Value* class_);
+		~Object();
+
 	private:
-		Entry* make_entry(const Value* name, Value* value);
+		Entry* make_entry(const std::string& name, Value* value, Entry* next = nullptr);
 		void delete_entry(Entry* entry);
 
 		Table* make_table(Size size);
 		void delete_table(Table* table);
 
+		void check_capacity();
+		void re_hash();
+
+	public:
+		void clear();
+
+
+		inline bool empty() const { return _size == 0; }
+		inline Size size() const { return _size; }
+
+		inline Value* insert(const Value* name, Value* value) { return check_capacity(), _table->insert(this, name, value); }
+		inline Value* insert(const char* name, Value* value) { return check_capacity(), _table->insert(this, name, value); }
+		inline Value* insert(const std::string& name, Value* value) { return check_capacity(), _table->insert(this, name, value); }
+
+		inline Value* contains(const Value* name) const { Entry* e = _table->find(name); return e ? literal::False : literal::True; }
+		inline Value* contains(const char* name) const { Entry* e = _table->find(name); return e ? literal::False : literal::True; }
+		inline Value* contains(const std::string& name) const { Entry* e = _table->find(name); return e ? literal::False : literal::True; }
+
+		inline Value* get(const Value* name) const { Entry* e = _table->find(name); return e ? static_cast<Value*>(e->value) : literal::Null; }
+		inline Value* get(const char* name) const { Entry* e = _table->find(name); return e ? static_cast<Value*>(e->value) : literal::Null; }
+		inline Value* get(const std::string& name) const { Entry* e = _table->find(name); return e ? static_cast<Value*>(e->value) : literal::Null; }
+
+		inline void erase(const Value* name) { _table->remove(this, name); }
+		inline void erase(const char* name) { _table->remove(this, name); }
+		inline void erase(const std::string& name) { _table->remove(this, name); }
+
 	public:
 		friend class Value;
+		friend struct Entry;
+		friend struct Table;
 	};
 }

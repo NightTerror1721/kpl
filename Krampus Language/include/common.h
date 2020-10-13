@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <utility>
+#include <vector>
 
 #ifndef __cpp_lib_concepts
 #define __cpp_lib_concepts

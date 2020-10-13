@@ -143,9 +143,16 @@ namespace kpl
 
 	void MemoryHeap::destroy_object(Value* const obj)
 	{
-		/*switch (obj->type())
+		switch (obj->_type)
 		{
-		}*/
+			case DataType::List:
+				reinterpret_cast<type::List*>(obj)->~List();
+				break;
+
+			case DataType::Object:
+				reinterpret_cast<type::Object*>(obj)->~Object();
+				break;
+		}
 	}
 
 	void MemoryHeap::garbage_collector()

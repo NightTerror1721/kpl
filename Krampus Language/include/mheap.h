@@ -118,5 +118,7 @@ namespace kpl
 		type::Array* make_array(Size length);
 
 		inline type::List* make_list() { return construct_instance<type::List>(this); }
+
+		inline type::Object* make_object(Value* _class = nullptr) { return __KPL_CONSTRUCT(reinterpret_cast<type::Object*>(malloc(sizeof(type::Object))), type::Object, this, _class); }
 	};
 }

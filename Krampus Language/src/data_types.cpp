@@ -39,7 +39,7 @@ namespace kpl
 			--_header.refs;
 	}
 
-	std::string Value::to_string()
+	std::string Value::to_string() const
 	{
 		switch (_type)
 		{
@@ -47,16 +47,16 @@ namespace kpl
 				return "null";
 
 			case DataType::Integer:
-				return std::to_string(reinterpret_cast<type::Integer*>(this)->_value);
+				return std::to_string(reinterpret_cast<const type::Integer*>(this)->_value);
 
 			case DataType::Float:
-				return std::to_string(reinterpret_cast<type::Float*>(this)->_value);
+				return std::to_string(reinterpret_cast<const type::Float*>(this)->_value);
 
 			case DataType::Boolean:
-				return reinterpret_cast<type::Boolean*>(this)->_state ? "true" : "false";
+				return reinterpret_cast<const type::Boolean*>(this)->_state ? "true" : "false";
 
 			case DataType::Array: {
-				type::Array* array = reinterpret_cast<type::Array*>(this);
+				const type::Array* array = reinterpret_cast<const type::Array*>(this);
 				if (array->_size == 0)
 					return "[]";
 
@@ -74,21 +74,42 @@ namespace kpl
 			}
 
 			case DataType::List: {
-				/*type::List* array = reinterpret_cast<type::List*>(this);
-				if (array->_size == 0)
+				const type::List* list = reinterpret_cast<const type::List*>(this);
+				if (list->_size == 0)
 					return "[]";
 
 				std::stringstream ss;
 				ss << "[";
 
-				for (Offset i = 0; i < array->_size; i++)
+				for (type::List::Node* node = list->_front; node; node = node->next)
 				{
-					if (i > 0)
+					if (node != list->_front)
 						ss << ", ";
-					ss << array->_array[i]->to_cppstring();
+					ss << node->value->to_string();
 				}
 
-				return ss << "]", ss.str();*/
+				return ss << "]", ss.str();
+			}
+
+			case DataType::Object: {
+				const type::Object* object = reinterpret_cast<const type::Object*>(this);
+				if (object->_size == 0)
+					return "{}";
+
+				std::stringstream ss;
+				ss << "{";
+
+				for (Offset i = 0; i < object->_table->size; ++i)
+				{
+					for (type::Object::Entry* entry = object->_table->entries[i]; entry; entry = entry->next)
+					{
+						if (entry != object->_table->entries[i])
+							ss << ", ";
+						ss << entry->name->to_string() << " = " << entry->value->to_string();
+					}
+				}
+
+				return ss << "}", ss.str();
 			}
 		}
 
@@ -113,14 +134,16 @@ namespace kpl::type
 		_hashcode{ 0 }
 	{}
 
+	Int64 String::hashcode(const std::string& str)
+	{
+		auto hash = std::hash<std::string>();
+		return hash(str);
+	}
+
 	Int64 String::hashcode() const
 	{
 		if (_hashcode == 0 && _str)
-		{
-			std::string str{ _str, _size };
-			auto hash = std::hash<std::string>();
-			_hashcode = hash(str);
-		}
+			_hashcode = hashcode(_str, _size);
 		return _hashcode;
 	}
 
@@ -277,28 +300,27 @@ namespace kpl::type
 
 namespace kpl::type
 {
-	Object::Entry::Entry(MemoryHeap* heap, const Value* name, Value* value) :
+	Object::Entry::Entry(MemoryHeap* heap, const std::string& name, Value* value, Entry* next) :
 		Value{ DataType::Internal },
-		name{ name->type() == DataType::String
-				? reinterpret_cast<const String*>(name)->copy(heap)
-				: heap->make_string(value->to_string())
-		},
-		value{ value }
+		name{ heap->make_string(name) },
+		value{ value },
+		next{ next }
 	{
 		increase_refcount();
-		name->increase_refcount();
+		this->name->increase_refcount();
 	}
 
-	Object::Entry* Object::make_entry(const Value* name, Value* value)
+	Object::Entry* Object::make_entry(const std::string& name, Value* value, Entry* next)
 	{
 		Entry* entry = reinterpret_cast<Entry*>(_heap->malloc(sizeof(Entry)));
-		return __KPL_CONSTRUCT(entry, Entry, _heap, name, value);
+		return __KPL_CONSTRUCT(entry, Entry, _heap, name, value, next);
 	}
 
 	void Object::delete_entry(Entry* entry)
 	{
 		entry->value = nullptr;
-		_heap->free(entry->name);
+		if(entry->name)
+			_heap->free(entry->name);
 		_heap->free(entry);
 	}
 
@@ -309,6 +331,251 @@ namespace kpl::type
 		size{ size }
 	{
 		increase_refcount();
+	}
+
+	Value* Object::Table::insert(Object* object, const Value* v_name, Value* value)
+	{
+		if (v_name == nullptr)
+			v_name = literal::Null;
+
+		if (v_name->type() == DataType::String)
+		{
+			const String* name = reinterpret_cast<const String*>(v_name);
+			Offset index = hash(name);
+
+			if (!entries[index])
+			{
+				entries[index] = object->make_entry(v_name->to_string(), value);
+				++object->_size;
+			}
+			else
+			{
+				const String* name = reinterpret_cast<const String*>(v_name);
+				for (Entry* entry = entries[index]; entry; entry = entry->next)
+					if (entry->name->compare(name) == 0)
+					{
+						Value* old = entry->value;
+						entry->value = value;
+						return old;
+					}
+
+				Entry* entry = object->make_entry(name->to_string(), value);
+
+				entry->next = entries[index];
+				entries[index] = entry;
+				++object->_size;
+			}
+		}
+		else
+		{
+			insert(object, v_name->to_string(), value);
+		}
+
+		return literal::Null;
+	}
+
+	Value* Object::Table::insert(Object* object, const std::string& name, Value* value)
+	{
+		Offset index = hash(name);
+
+		if (!entries[index])
+		{
+			entries[index] = object->make_entry(name, value);
+			++object->_size;
+		}
+		else
+		{
+			for (Entry* entry = entries[index]; entry; entry = entry->next)
+				if (entry->name->compare(name) == 0)
+				{
+					Value* old = entry->value;
+					entry->value = value;
+					return old;
+				}
+
+			Entry* entry = object->make_entry(name, value);
+
+			entry->next = entries[index];
+			entries[index] = entry;
+			++object->_size;
+		}
+
+		return literal::Null;
+	}
+
+	Value* Object::Table::insert(Object* object, const char* name, Value* value)
+	{
+		Offset index = hash(name);
+
+		if (!entries[index])
+		{
+			entries[index] = object->make_entry(name, value);
+			++object->_size;
+		}
+		else
+		{
+			for (Entry* entry = entries[index]; entry; entry = entry->next)
+				if (entry->name->compare(name) == 0)
+				{
+					Value* old = entry->value;
+					entry->value = value;
+					return old;
+				}
+
+			Entry* entry = object->make_entry(name, value);
+
+			entry->next = entries[index];
+			entries[index] = entry;
+			++object->_size;
+		}
+
+		return literal::Null;
+	}
+
+	void Object::Table::move(Entry* entry)
+	{
+		Offset index = hash(entry->name);
+
+		if (!entries[index])
+			entries[index] = entry;
+		else
+		{
+			entry->next = entries[index];
+			entries[index] = entry;
+		}
+	}
+
+	Object::Entry* Object::Table::find(const Value* v_name)
+	{
+		v_name = !v_name ? literal::Null : v_name;
+		if (v_name->type() == DataType::String)
+		{
+			const String* name = reinterpret_cast<const String*>(v_name);
+			Offset index = hash(name);
+
+			for (Entry* entry = entries[index]; entry; entry = entry->next)
+				if (entry->name->compare(name) == 0)
+					return entry;
+			return nullptr;
+		}
+		else
+		{
+			std::string name = v_name->to_string();
+			Offset index = hash(name);
+
+			for (Entry* entry = entries[index]; entry; entry = entry->next)
+				if (entry->name->compare(name) == 0)
+					return entry;
+			return nullptr;
+		}
+	}
+
+	Object::Entry* Object::Table::find(const char* name)
+	{
+		Offset index = hash(name);
+
+		for (Entry* entry = entries[index]; entry; entry = entry->next)
+			if (entry->name->compare(name) == 0)
+				return entry;
+		return nullptr;
+	}
+
+	Object::Entry* Object::Table::find(const std::string& name)
+	{
+		Offset index = hash(name);
+
+		for (Entry* entry = entries[index]; entry; entry = entry->next)
+			if (entry->name->compare(name) == 0)
+				return entry;
+		return nullptr;
+	}
+
+	void Object::Table::remove(Object* object, const Value* v_name)
+	{
+		Entry* entry, *prev = nullptr;
+		Offset index;
+
+		v_name = !v_name ? literal::Null : v_name;
+		if (v_name->type() == DataType::String)
+		{
+			const String* name = reinterpret_cast<const String*>(v_name);
+			index = hash(name);
+
+			for (entry = entries[index]; entry; prev = entry, entry = entry->next)
+				if (entry->name->compare(name) == 0)
+					break;
+		}
+		else
+		{
+			std::string name = v_name->to_string();
+			index = hash(name);
+
+			for (entry = entries[index]; entry; prev = entry, entry = entry->next)
+				if (entry->name->compare(name) == 0)
+					break;
+		}
+
+		if (!entry)
+			return;
+
+		if (entry == entries[index])
+			entries[index] = entry->next;
+		else prev->next = entry->next;
+
+		object->delete_entry(entry);
+		--object->_size;
+	}
+
+	void Object::Table::remove(Object* object, const char* name)
+	{
+		Entry* entry, *prev = nullptr;
+		Offset index = hash(name);
+
+		for (entry = entries[index]; entry; prev = entry, entry = entry->next)
+			if (entry->name->compare(name) == 0)
+			{
+				if (entry == entries[index])
+					entries[index] = entry->next;
+				else prev->next = entry->next;
+
+				object->delete_entry(entry);
+				--object->_size;
+
+				return;
+			}
+	}
+
+	void Object::Table::remove(Object* object, const std::string& name)
+	{
+		Entry* entry, *prev = nullptr;
+		Offset index = hash(name);
+
+		for (entry = entries[index]; entry; prev = entry, entry = entry->next)
+			if (entry->name->compare(name) == 0)
+			{
+				if (entry == entries[index])
+					entries[index] = entry->next;
+				else prev->next = entry->next;
+
+				object->delete_entry(entry);
+				--object->_size;
+
+				return;
+			}
+	}
+
+	void Object::Table::delete_node(Object* object, Offset node_idx)
+	{
+		if (entries[node_idx])
+		{
+			for (Entry* entry = entries[node_idx], *next; entry; entry = next)
+			{
+				next = entry->next;
+				object->delete_entry(entry);
+				--object->_size;
+			}
+			entries[node_idx] = nullptr;
+		}
 	}
 
 	Object::Table* Object::make_table(Size size)
@@ -322,7 +589,57 @@ namespace kpl::type
 	{
 		for (Offset i = 0; i < table->size; ++i)
 			if(table->entries[i])
-				delete_entry(table->entries[i]);
+				table->delete_node(this, i);
 		_heap->free(table);
+	}
+
+	void Object::check_capacity()
+	{
+		if (!_table)
+			_table = make_table(default_capacity);
+		else
+		{
+			Size load_factor = static_cast<Size>(_table->size * 0.75);
+			if (_size >= load_factor)
+				re_hash();
+		}
+	}
+
+	void Object::re_hash()
+	{
+		Table* newtable = make_table(_table->size * 2);
+		for (Offset i = 0; i < _table->size; ++i)
+		{
+			for (Entry* entry = _table->entries[i], *next; entry; entry = next)
+			{
+				next = entry->next;
+				newtable->move(entry);
+			}
+			_table->entries[i] = nullptr;
+		}
+
+		_heap->free(_table);
+		_table = newtable;
+	}
+
+
+
+	Object::Object(MemoryHeap* heap, Value* class_) :
+		Value{ DataType::Object },
+		_heap{ heap },
+		_table{ nullptr },
+		_size{ 0 },
+		_class{ class_ ? class_ : literal::Null }
+	{}
+
+	Object::~Object()
+	{
+		delete_table(_table);
+	}
+
+	void Object::clear()
+	{
+		for (Offset i = 0; i < _table->size; ++i)
+			_table->delete_node(this, i);
 	}
 }

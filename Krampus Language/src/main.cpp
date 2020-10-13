@@ -1,12 +1,16 @@
 #include "common.h"
 #include "mheap.h"
+#include "instruction.h"
 
 int main(int argc, char** argv)
 {
 	kpl::MemoryHeap heap;
 
-	kpl::type::String* str = heap.make_string("hello world");
-	heap.free(str);
+	kpl::inst::Instruction inst;
+
+	inst.a(1).b(2).c(-1);
+
+	std::cout << inst.c() << std::endl;
 
 	return 0;
 }
