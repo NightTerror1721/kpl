@@ -10,8 +10,8 @@ namespace kpl::inst::arg
 	constexpr kpl::op::Opcode opcode(InstructionCode inst) { return static_cast<kpl::op::Opcode>(inst & 0x3f); }
 
 	constexpr unsigned int a(InstructionCode inst) { return static_cast<unsigned int>(inst >> 6) & 0xff; }
-	constexpr int b(InstructionCode inst) { return static_cast<int>((inst >> 15) & 0xff) | (((inst >> 14) & 0x1) << 31); }
-	constexpr int c(InstructionCode inst) { return static_cast<int>((inst >> 24) & 0xff) | (((inst >> 23) & 0x1) << 31); }
+	constexpr unsigned int b(InstructionCode inst) { return static_cast<int>((inst >> 15) & 0xff) | (((inst >> 14) & 0x1) << 31); }
+	constexpr unsigned int c(InstructionCode inst) { return static_cast<int>((inst >> 24) & 0xff) | (((inst >> 23) & 0x1) << 31); }
 
 	constexpr unsigned int bx(InstructionCode inst) { return static_cast<unsigned int>((inst >> 14) & 0x3ffff); }
 	constexpr int sbx(InstructionCode inst) { return static_cast<int>((inst >> 15) & 0x1ffff) | (((inst >> 14) & 0x1) << 31); }
