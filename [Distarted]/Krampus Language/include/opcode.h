@@ -2,9 +2,9 @@
 
 #include "common.h"
 
-namespace kpl::op
+namespace kpl::opcode
 {
-	enum class Opcode : UInt8
+	enum class id : UInt8
 	{
 		NOP
 	};

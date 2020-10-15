@@ -8,8 +8,7 @@ namespace kpl::inst
 			_inst = (_inst & b_mask) | static_cast<Instruction>((value & 0xff) << 15);
 		else
 		{
-			unsigned int uvalue = static_cast<unsigned int>(value);
-			_inst = (_inst & b_mask) | static_cast<Instruction>((uvalue & 0xff) << 15) | (0x1 << 14);
+			_inst = (_inst & b_mask) | static_cast<Instruction>((-value & 0xff) << 15) | (0x1 << 14);
 		}
 
 		return *this;
@@ -21,8 +20,7 @@ namespace kpl::inst
 			_inst = (_inst & c_mask) | static_cast<Instruction>((value & 0xff) << 24);
 		else
 		{
-			unsigned int uvalue = static_cast<unsigned int>(value);
-			_inst = (_inst & c_mask) | static_cast<Instruction>((uvalue & 0xff) << 24) | (0x1 << 23);
+			_inst = (_inst & c_mask) | static_cast<Instruction>((-value & 0xff) << 24) | (0x1 << 23);
 		}
 
 		return *this;
@@ -34,8 +32,7 @@ namespace kpl::inst
 			_inst = (_inst & bx_mask) | static_cast<Instruction>((value & 0x1ffff) << 15);
 		else
 		{
-			unsigned int uvalue = static_cast<unsigned int>(value);
-			_inst = (_inst & bx_mask) | static_cast<Instruction>((uvalue & 0x1ffff) << 15) | (0x1 << 14);
+			_inst = (_inst & bx_mask) | static_cast<Instruction>((value & 0x1ffff) << 15) | (0x1 << 14);
 		}
 
 		return *this;
@@ -47,8 +44,7 @@ namespace kpl::inst
 			_inst = (_inst & ax_mask) | static_cast<Instruction>((value & 0x1ffffff) << 7);
 		else
 		{
-			unsigned int uvalue = static_cast<unsigned int>(value);
-			_inst = (_inst & ax_mask) | static_cast<Instruction>((uvalue & 0x1ffffff) << 7) | (0x1 << 6);
+			_inst = (_inst & ax_mask) | static_cast<Instruction>((value & 0x1ffffff) << 7) | (0x1 << 6);
 		}
 
 		return *this;

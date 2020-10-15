@@ -1,528 +1,275 @@
 #pragma once
 
 #include "common.h"
+#include "mheap.h"
+
+#define inc_ref(_Obj) (_Obj)->increase_reference_count()
+#define dec_ref(_Obj) (_Obj)->decrease_reference_count()
 
 namespace kpl
 {
-	class MemoryHeap;
-
 	enum class DataType
 	{
 		Null,
-
 		Integer,
 		Float,
 		Boolean,
 		String,
-
 		Array,
-
 		List,
-
 		Object,
-
-		Callable,
-
-		Userdata,
-		Internal
+		Function,
+		Userdata
 	};
-
-
-	namespace type
-	{
-		class Null;
-		class Integer;
-		class Float;
-		class Boolean;
-		class String;
-		class Array;
-		class List;
-		class Object;
-		class Callable;
-		class Userdata;
-	}
-
 
 	class Value
 	{
 	private:
-		mutable struct {
-			Size size;
-			Offset next;
-			Offset prev;
-			UInt32 refs;
-		} _header;
+		DataType _type;
+		union {
+			type::Null null;
+			type::Integer integral;
+			type::Float floating;
+			type::Boolean boolean;
+			type::String* string;
+			type::Array* array;
+			type::List* list;
+			type::Object* object;
+			type::Function* function;
+			type::Userdata* userdata;
+			void* raw_ptr;
+		} _value;
 
 	private:
-		const DataType _type;
-
-	protected:
-#pragma warning(push)
-#pragma warning(disable : 26495)
-		inline Value(DataType type) : _type{ type } {}
-#pragma warning(pop)
+		void try_inc_ref();
+		void try_dec_ref();
 
 	public:
-		Value(const Value&) = delete;
-		Value(Value&&) noexcept = delete;
+		inline Value() : _type{ DataType::Null }, _value{ .null = nullptr } {}
+		inline Value(type::Null) : _type{ DataType::Null }, _value{ .null = nullptr } {}
+		inline Value(type::Integer value) : _type{ DataType::Integer }, _value{ .integral = value } {}
+		inline Value(type::Float value) : _type{ DataType::Float }, _value{ .floating = value } {}
+		inline Value(type::Boolean value) : _type{ DataType::Boolean }, _value{ .boolean = value } {}
 
-		Value& operator= (const Value&) = delete;
-		Value& operator= (Value&&) noexcept = delete;
+		Value(type::String* value);
+		Value(type::Array* value);
+		Value(type::List* value);
+		Value(type::Object* value);
+		Value(type::Function* value);
+		Value(type::Userdata* value);
 
-	public:
+		template<std::integral _Ty>
+		inline Value(_Ty value) : Value{ static_cast<type::Integer>(value) } {}
+
+		inline Value(const Value& value) : _type{ value._type }, _value{ value._value } { try_inc_ref(); }
+		inline Value(Value&& value) noexcept : _type{ value._type }, _value{ std::move(value._value) } {}
+
+		inline ~Value()
+		{
+			try_dec_ref();
+			_type = DataType::Null;
+		}
+
+		inline Value& operator= (type::Null) { try_dec_ref(); return _type = DataType::Null, *this; }
+		inline Value& operator= (type::Integer right) { try_dec_ref(); return _type = DataType::Integer, _value.integral = right, *this; }
+		inline Value& operator= (type::Float right) { try_dec_ref(); return _type = DataType::Float, _value.floating = right, *this; }
+		inline Value& operator= (type::Boolean right) { try_dec_ref(); return _type = DataType::Boolean, _value.boolean = right, *this; }
+
+		Value& operator= (type::String* right);
+		Value& operator= (type::Array* right);
+		Value& operator= (type::List* right);
+		Value& operator= (type::Object* right);
+		Value& operator= (type::Function* right);
+		Value& operator= (type::Userdata* right);
+
+		template<std::integral _Ty>
+		inline Value& operator= (_Ty right) { return *this = static_cast<type::Integer>(right); }
+
+		inline Value& operator= (const Value& right) { try_dec_ref(); _type = right._type, _value = right._value; try_inc_ref(); return *this; }
+		inline Value& operator= (Value&& right) noexcept { try_dec_ref(); return _type = right._type, _value = std::move(right._value), *this; }
+
+
 		inline DataType type() const { return _type; }
+		
+		template<typename _Ty>
+		requires std::same_as<type::Null, _Ty> ||
+			std::same_as<type::Integer, _Ty> ||
+			std::same_as<type::Float, _Ty> ||
+			std::same_as<type::Boolean, _Ty> ||
+			std::same_as<type::String*, _Ty> ||
+			std::same_as<type::Array*, _Ty> ||
+			std::same_as<type::List*, _Ty> ||
+			std::same_as<type::Object*, _Ty> ||
+			std::same_as<type::Function*, _Ty> ||
+			std::same_as<type::Userdata*, _Ty>
+		inline _Ty as()
+		{
+			if constexpr (std::same_as<type::Null, _Ty>) return nullptr;
+			else if constexpr (std::same_as<type::Integer, _Ty>) return _value.integral;
+			else if constexpr (std::same_as<type::Float, _Ty>) return _value.floating;
+			else if constexpr (std::same_as<type::Boolean, _Ty>) return _value.boolean;
+			else if constexpr (std::same_as<type::String*, _Ty>) return _value.string;
+			else if constexpr (std::same_as<type::Array*, _Ty>) return _value.array;
+			else if constexpr (std::same_as<type::List*, _Ty>) return _value.list;
+			else if constexpr (std::same_as<type::Object*, _Ty>) return _value.object;
+			else if constexpr (std::same_as<type::Function*, _Ty>) return _value.function;
+			else if constexpr (std::same_as<type::Userdata*, _Ty>) return _value.userdata;
+			else return _Ty{};
+		}
 
-		void increase_refcount() const;
-		void decrease_refcount() const;
+		inline type::Integer integral() const { return _value.integral; }
+		inline type::Float floating() const { return _value.floating; }
+		inline type::Boolean boolean() const { return _value.boolean; }
+		inline type::String& string() const { return *_value.string; }
+		inline type::Array& array() const { return *_value.array; }
+		inline type::List& list() const { return *_value.list; }
+		inline type::Object& object() const { return *_value.object; }
+		inline type::Function& function() const { return *_value.function; }
+		inline type::Userdata& userdata() const { return *_value.userdata; }
+	};
+}
 
-		std::string to_string() const;
+
+
+namespace kpl::type
+{
+	class String : public KPLVirtualObject, public std::string
+	{
+	public:
+		static void _mheap_delete(void* block);
 
 	public:
-		friend class MemoryHeap;
+		inline String() : std::string() {}
+		inline String(const char* str) : std::string(str) {}
+		inline String(const std::string& str) : std::string(str) {}
+		inline String(std::string&& str) : std::string(std::move(str)) {}
+		~String() = default;
 	};
+}
 
-	namespace type::literal
+
+
+namespace kpl::type
+{
+	class Array : public KPLVirtualObject
 	{
-		extern Value* const Null;
-		extern Value* const True;
-		extern Value* const False;
-	}
+	private:
+		Value* _array;
+		Size _length;
+
+	public:
+		static void _mheap_delete(void* block);
+
+	public:
+		explicit Array(Size length);
+		Array(const Value* array, Size length);
+		Array(const std::vector<Value>& vector);
+		Array(std::vector<Value>&& vector);
+		Array(const std::initializer_list<Value>& args);
+		~Array();
+
+		inline Size length() const { return _length; }
+		inline Size size() const { return _length; }
+		inline bool empty() const { return _length == 0; }
+
+		inline Value& operator[] (Offset index) { return _array[index]; }
+		inline const Value& operator[] (Offset index) const { return _array[index]; }
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class List : public KPLVirtualObject, public std::list<Value>
+	{
+	public:
+		static void _mheap_delete(void* block);
+
+	public:
+		inline List() : list{} {}
+		~List() = default;
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class Object : public KPLVirtualObject, public std::unordered_map<std::string, Value>
+	{
+	public:
+		static void _mheap_delete(void* block);
+
+	public:
+		inline Object() : unordered_map{} {}
+		~Object() = default;
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class Function : public KPLVirtualObject
+	{
+
+	};
+}
+
+
+
+namespace kpl::type
+{
+	class Userdata : public KPLVirtualObject
+	{
+
+	};
 }
 
 
 
 namespace kpl
 {
-	class ValueReference
+	inline Value::Value(type::String* value) : _type{ DataType::String }, _value{ .string = value } { value->increase_reference_count(); }
+	inline Value::Value(type::Array* value) : _type{ DataType::Array }, _value{ .array = value } { value->increase_reference_count(); }
+	inline Value::Value(type::List* value) : _type{ DataType::List }, _value{ .list = value } { value->increase_reference_count(); }
+	inline Value::Value(type::Object* value) : _type{ DataType::Object }, _value{ .object = value } { value->increase_reference_count(); }
+	inline Value::Value(type::Function* value) : _type{ DataType::Function }, _value{ .function = value } { value->increase_reference_count(); }
+	inline Value::Value(type::Userdata* value) : _type{ DataType::Userdata }, _value{ .userdata = value } { value->increase_reference_count(); }
+
+	inline Value& Value::operator= (type::String* right) { try_dec_ref(); return _type = DataType::String, _value.string = right, inc_ref(right), * this; }
+	inline Value& Value::operator= (type::Array* right) { try_dec_ref(); return _type = DataType::Array, _value.array = right, inc_ref(right), * this; }
+	inline Value& Value::operator= (type::List* right) { try_dec_ref(); return _type = DataType::List, _value.list = right, inc_ref(right), * this; }
+	inline Value& Value::operator= (type::Object* right) { try_dec_ref(); return _type = DataType::Object, _value.object = right, inc_ref(right), * this; }
+	inline Value& Value::operator= (type::Function* right) { try_dec_ref(); return _type = DataType::Function, _value.function = right, inc_ref(right), * this; }
+	inline Value& Value::operator= (type::Userdata* right) { try_dec_ref(); return _type = DataType::Userdata, _value.userdata = right, inc_ref(right), * this; }
+
+	inline void Value::try_inc_ref()
 	{
-	private:
-		Value* _value;
-
-	public:
-		inline ValueReference() : _value{ nullptr } {}
-		inline ValueReference(decltype(nullptr)) : _value{} {}
-		inline ValueReference(Value* value) : _value{ value } { if (value) value->increase_refcount(); }
-		inline ValueReference(const ValueReference& ref) : _value{ ref._value } { if (_value) _value->increase_refcount(); }
-		inline ValueReference(ValueReference&& ref) noexcept : _value{ ref._value } { ref._value = nullptr; }
-		inline ~ValueReference() { if (_value) _value->decrease_refcount(); _value = nullptr; }
-
-		inline ValueReference& operator= (Value* value)
+		switch (_type)
 		{
-			if (_value)
-				_value->decrease_refcount();
-			_value = value;
-			if (value)
-				value->increase_refcount();
-			return *this;
+			case DataType::String: inc_ref(_value.string); break;
+			case DataType::Array: inc_ref(_value.array); break;
+			case DataType::List: inc_ref(_value.list); break;
+			case DataType::Object: inc_ref(_value.object); break;
+			case DataType::Function: inc_ref(_value.function); break;
+			case DataType::Userdata: inc_ref(_value.userdata); break;
 		}
-		inline ValueReference& operator= (const ValueReference& right)
+	}
+	inline void Value::try_dec_ref()
+	{
+		switch (_type)
 		{
-			if (_value)
-				_value->decrease_refcount();
-			_value = right._value;
-			if (_value)
-				_value->increase_refcount();
-			return *this;
+			case DataType::String: dec_ref(_value.string); break;
+			case DataType::Array: dec_ref(_value.array); break;
+			case DataType::List: dec_ref(_value.list); break;
+			case DataType::Object: dec_ref(_value.object); break;
+			case DataType::Function: dec_ref(_value.function); break;
+			case DataType::Userdata: dec_ref(_value.userdata); break;
 		}
-		inline ValueReference& operator= (ValueReference&& right) noexcept
-		{
-			if (_value)
-				_value->decrease_refcount();
-			_value = right._value;
-			right._value = nullptr;
-			return *this;
-		}
-		inline ValueReference& operator= (decltype(nullptr))
-		{
-			if (_value)
-			{
-				_value->decrease_refcount();
-				_value = nullptr;
-			}
-			return *this;
-		}
-
-		inline operator Value* () const { return _value ? _value : type::literal::Null; }
-		inline operator const Value* () const { return _value ? _value : type::literal::Null; }
-
-		inline Value* operator-> () { return _value ? _value : type::literal::Null; }
-		inline const Value* operator-> () const { return _value ? _value : type::literal::Null; }
-
-		inline operator bool() const { return _value; }
-		inline bool operator! () const { return !_value; }
-	};
+	}
 }
 
-
-
-namespace kpl::type
-{
-	class Null : public Value
-	{
-	public:
-		Null(const Null&) = delete;
-		Null(Null&&) noexcept = delete;
-
-		Null& operator= (const Null&) = delete;
-		Null& operator= (Null&&) = delete;
-
-	private:
-		inline Null() : Value{ DataType::Null } {}
-
-	public:
-		static const Null instance;
-
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class Integer : public Value
-	{
-	private:
-		Int64 _value;
-
-	public:
-		inline Integer() : Value{ DataType::Integer }, _value{ 0 } {}
-		inline Integer(Int64 value) : Value{ DataType::Integer }, _value{ value } {}
-		Integer(const Integer&) = delete;
-		Integer(Integer&&) noexcept = delete;
-
-		Integer& operator= (const Integer&) = delete;
-		Integer& operator= (Integer&&) noexcept = delete;
-
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class Float : public Value
-	{
-	private:
-		double _value;
-
-	public:
-		inline Float() : Value{ DataType::Float }, _value{ 0 } {}
-		inline Float(double value) : Value{ DataType::Float }, _value{ value } {}
-		Float(const Float&) = delete;
-		Float(Float&&) noexcept = delete;
-
-		Float& operator= (const Float&) = delete;
-		Float& operator= (Float&&) = delete;
-
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class Boolean : public Value
-	{
-	private:
-		bool _state;
-
-	public:
-		Boolean(const Boolean&) = delete;
-		Boolean(Boolean&&) noexcept = delete;
-
-		Boolean& operator= (const Boolean) = delete;
-		Boolean& operator= (Boolean&&) noexcept = delete;
-
-	private:
-		inline Boolean(bool state) : Value{ DataType::Boolean }, _state{ state } {}
-
-	public:
-		static const Boolean true_instance;
-		static const Boolean false_instance;
-
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class String : public Value
-	{
-	private:
-		const char* _str;
-		Size _size;
-		mutable Int64 _hashcode;
-
-	public:
-		String(const char* str_addr, Size str_size);
-		String(const String&) = delete;
-		String(String&&) noexcept = delete;
-
-		String& operator= (const String&) = delete;
-		String& operator= (String&&) noexcept = delete;
-
-		inline String() :
-			Value{ DataType::String },
-			_str{ nullptr },
-			_size{ 0 },
-			_hashcode{ 0 }
-		{}
-
-		Int64 hashcode() const;
-
-		String* copy(MemoryHeap* heap) const;
-
-		inline int compare(const String* str) const { return std::strncmp(_str, str->_str, std::min(_size, str->_size)); }
-		inline int compare(const std::string& str) const { return std::strncmp(_str, str.data(), std::min(_size, str.size())); }
-		inline int compare(const char* str) const { return std::strncmp(_str, str, std::min(_size, std::strlen(str))); }
-		inline int compare(const char* str, Size len) const { return std::strncmp(_str, str, std::min(_size, len)); }
-
-	public:
-		static Int64 hashcode(const std::string& str);
-		static inline Int64 hashcode(const char* str, Size len) { return hashcode(std::string{ str, len }); }
-		static inline Int64 hashcode(const char* str) { return hashcode(std::string{ str }); }
-
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class Array : public Value
-	{
-	private:
-		ValueReference* _array;
-		Size _size;
-
-	public:
-		Array(ValueReference* array_addr, Size array_size);
-		Array(const Array&) = delete;
-		Array(Array&&) noexcept = delete;
-
-		Array& operator= (const Array&) = delete;
-		Array& operator= (Array&&) noexcept = delete;
-
-		inline Array() :
-			Value{ DataType::Array },
-			_array{ nullptr },
-			_size{ 0 }
-		{}
-
-	public:
-		inline Size length() const { return _size; }
-
-		inline void set(Offset index, Value* value) { _array[index] = value; }
-		inline Value* get(Offset index) { return _array[index]; }
-
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class List : public Value
-	{
-	private:
-		struct Node : public Value
-		{
-			ValueReference value;
-			Node* next;
-			Node* prev;
-
-			inline Node(Value* value = nullptr, Node* next = nullptr, Node* prev = nullptr) :
-				Value{ DataType::Internal },
-				value{ value ? value : literal::Null },
-				next{ next },
-				prev{ prev }
-			{
-				increase_refcount();
-			};
-
-			Node(const Node&) = delete;
-			Node(Node&&) noexcept = delete;
-			Node& operator= (const Node&) = delete;
-			Node& operator= (Node&&) noexcept = delete;
-
-			inline Value* safe_value() { return !value ? literal::Null : static_cast<Value*>(value); }
-		};
-
-	private:
-		MemoryHeap* _heap;
-		Node* _front;
-		Node* _back;
-		Size _size;
-
-	public:
-		List(const List&) = delete;
-		List(List&&) noexcept = delete;
-
-		List& operator= (const List&) = delete;
-		List& operator= (List&&) noexcept = delete;
-
-		inline List(MemoryHeap* heap) :
-			Value{ DataType::List },
-			_heap{ heap },
-			_front{ nullptr },
-			_back{ nullptr },
-			_size{ 0 }
-		{}
-
-	public:
-		void push_back(Value* value);
-		void push_front(Value* value);
-		void insert(Offset index, Value* value);
-		void set(Offset index, Value* value);
-
-		//Value* contains(Value* value) const;
-
-		Value* get(Offset index) const;
-
-		Value* erase(Offset index);
-		//Value* erase(Value* value);
-		void clear();
-
-		//Value* index_of(Value* value) const;
-
-	public:
-		inline ~List() { clear(); }
-
-		inline bool empty() const { return !_front; }
-		inline Size size() const { return _size; }
-
-		inline Value* front() const { return _front ? _front->value : nullptr; }
-		inline Value* back() const { return _back ? _back->value : nullptr; }
-
-	private:
-		Node* make_node(Value* value, Node* next = nullptr, Node* prev = nullptr);
-		void delete_node(Node* node);
-		Node* find_node(Offset index) const;
-
-	public:
-		friend class Value;
-	};
-}
-
-
-
-namespace kpl::type
-{
-	class Object : public Value
-	{
-	private:
-		struct Entry : public Value
-		{
-			String* name;
-			ValueReference value;
-			Entry* next;
-
-			Entry(const Entry&) = delete;
-			Entry(Entry&&) noexcept = delete;
-
-			Entry& operator= (const Entry&) = delete;
-			Entry& operator= (Entry&&) noexcept = delete;
-
-			Entry(MemoryHeap* heap, const std::string& name, Value* value, Entry* next);
-		};
-
-		struct Table : public Value
-		{
-			MemoryHeap* const heap;
-			Entry** const entries;
-			Size const size;
-
-			Table(const Table&) = delete;
-			Table(Table&&) noexcept = delete;
-
-			Table& operator= (const Table&) = delete;
-			Table& operator= (Table&&) noexcept = delete;
-
-			Table(MemoryHeap* heap, Entry** entries, Size size);
-
-			Value* insert(Object* object, const Value* name, Value* value);
-			Value* insert(Object* object, const std::string& name, Value* value);
-			Value* insert(Object* object, const char* name, Value* value);
-
-			void move(Entry* old_entry);
-
-			Entry* find(const Value* name);
-			Entry* find(const char* name);
-			Entry* find(const std::string& name);
-
-			void remove(Object* object, const Value* name);
-			void remove(Object* object, const char* name);
-			void remove(Object* object, const std::string& name);
-
-			void delete_node(Object* object, Offset node_idx);
-
-			inline Offset hash(const std::string& str) { return static_cast<Offset>(String::hashcode(str) % size); }
-			inline Offset hash(const String* str) { return static_cast<Offset>(str->hashcode() % size); }
-		};
-
-	private:
-		static constexpr int default_capacity = 16;
-
-	private:
-		MemoryHeap* const _heap;
-		Table* _table;
-		Size _size;
-		Value* const _class;
-
-	public:
-		Object(const Object&) = delete;
-		Object(Object&&) noexcept = delete;
-
-		Object& operator= (const Object&) = delete;
-		Object& operator= (Object&&) noexcept = delete;
-
-	public:
-		Object(MemoryHeap* heap, Value* class_);
-		~Object();
-
-	private:
-		Entry* make_entry(const std::string& name, Value* value, Entry* next = nullptr);
-		void delete_entry(Entry* entry);
-
-		Table* make_table(Size size);
-		void delete_table(Table* table);
-
-		void check_capacity();
-		void re_hash();
-
-	public:
-		void clear();
-
-
-		inline bool empty() const { return _size == 0; }
-		inline Size size() const { return _size; }
-
-		inline Value* insert(const Value* name, Value* value) { return check_capacity(), _table->insert(this, name, value); }
-		inline Value* insert(const char* name, Value* value) { return check_capacity(), _table->insert(this, name, value); }
-		inline Value* insert(const std::string& name, Value* value) { return check_capacity(), _table->insert(this, name, value); }
-
-		inline Value* contains(const Value* name) const { Entry* e = _table->find(name); return e ? literal::False : literal::True; }
-		inline Value* contains(const char* name) const { Entry* e = _table->find(name); return e ? literal::False : literal::True; }
-		inline Value* contains(const std::string& name) const { Entry* e = _table->find(name); return e ? literal::False : literal::True; }
-
-		inline Value* get(const Value* name) const { Entry* e = _table->find(name); return e ? static_cast<Value*>(e->value) : literal::Null; }
-		inline Value* get(const char* name) const { Entry* e = _table->find(name); return e ? static_cast<Value*>(e->value) : literal::Null; }
-		inline Value* get(const std::string& name) const { Entry* e = _table->find(name); return e ? static_cast<Value*>(e->value) : literal::Null; }
-
-		inline void erase(const Value* name) { _table->remove(this, name); }
-		inline void erase(const char* name) { _table->remove(this, name); }
-		inline void erase(const std::string& name) { _table->remove(this, name); }
-
-	public:
-		friend class Value;
-		friend struct Entry;
-		friend struct Table;
-	};
-}
+#undef inc_ref
+#undef dec_ref

@@ -3,21 +3,21 @@
 #include "common.h"
 #include "opcode.h"
 
-namespace kpl { typedef UInt32 InstructionCode; }
-
 namespace kpl::inst::arg
 {
-	constexpr kpl::op::Opcode opcode(InstructionCode inst) { return static_cast<kpl::op::Opcode>(inst & 0x3f); }
+	constexpr kpl::opcode::id opcode(InstructionCode inst) { return static_cast<kpl::opcode::id>(inst & 0x3f); }
 
 	constexpr unsigned int a(InstructionCode inst) { return static_cast<unsigned int>(inst >> 6) & 0xff; }
-	constexpr unsigned int b(InstructionCode inst) { return static_cast<int>((inst >> 15) & 0xff) | (((inst >> 14) & 0x1) << 31); }
-	constexpr unsigned int c(InstructionCode inst) { return static_cast<int>((inst >> 24) & 0xff) | (((inst >> 23) & 0x1) << 31); }
+	constexpr unsigned int b(InstructionCode inst) { return static_cast<unsigned int>((inst >> 15) & 0xff); }
+	constexpr unsigned int c(InstructionCode inst) { return static_cast<unsigned int>((inst >> 24) & 0xff); }
+
+	constexpr bool kb(InstructionCode inst) { return (inst >> 14) & 0x1; }
+	constexpr bool kc(InstructionCode inst) { return (inst >> 23) & 0x1; }
 
 	constexpr unsigned int bx(InstructionCode inst) { return static_cast<unsigned int>((inst >> 14) & 0x3ffff); }
-	constexpr int sbx(InstructionCode inst) { return static_cast<int>((inst >> 15) & 0x1ffff) | (((inst >> 14) & 0x1) << 31); }
-
+	constexpr int sbx(InstructionCode inst) { return ((inst >> 14) & 0x1) ? ((inst >> 15) & 0x1ffff) | 0xffff8000 : ((inst >> 15) | 0x1ffff); }
 	constexpr unsigned int ax(InstructionCode inst) { return static_cast<unsigned int>((inst >> 6) & 0x3ffffff); }
-	constexpr int sax(InstructionCode inst) { return static_cast<int>((inst >> 7) & 0x1ffffff) | (((inst >> 6) & 0x1) << 31); }
+	constexpr int sax(InstructionCode inst) { return ((inst >> 6) & 0x1) ? ((inst >> 7) & 0x1ffffff) | 0xffffff80 : ((inst >> 7) | 0x1ffffff); }
 }
 
 namespace kpl::inst
@@ -52,15 +52,20 @@ namespace kpl::inst
 		Instruction& sax(int value);
 
 
-		inline Instruction& opcode(kpl::op::Opcode op) { return _inst = (_inst & opcode_mask) | static_cast<InstructionCode>(static_cast<int>(op) & 0x3f), *this; }
+		inline Instruction& opcode(kpl::opcode::id op) { return _inst = (_inst & opcode_mask) | static_cast<InstructionCode>(static_cast<int>(op) & 0x3f), *this; }
 		inline Instruction& a(unsigned int value) { return _inst = (_inst & a_mask) | static_cast<InstructionCode>((value & 0xff) << 6), *this; }
 		inline Instruction& bx(unsigned int value) { return _inst = (_inst & bx_mask) | static_cast<InstructionCode>((value & 0x3ffff) << 14), *this; }
 		inline Instruction& ax(unsigned int value) { return _inst = (_inst & ax_mask) | static_cast<InstructionCode>((value & 0x3ffffff) << 6), *this; }
 
-		inline kpl::op::Opcode opcode() const { return arg::opcode(_inst); }
+		inline Instruction& b(unsigned int value, bool is_constant) { return b(is_constant ? -static_cast<int>(value) : static_cast<int>(value)); }
+		inline Instruction& c(unsigned int value, bool is_constant) { return c(is_constant ? -static_cast<int>(value) : static_cast<int>(value)); }
+
+		inline kpl::opcode::id opcode() const { return arg::opcode(_inst); }
 		inline unsigned int a() const { return arg::a(_inst); }
-		inline int b() const { return arg::b(_inst); }
-		inline int c() const { return arg::c(_inst); }
+		inline unsigned int b() const { return arg::b(_inst); }
+		inline unsigned int c() const { return arg::c(_inst); }
+		inline bool kb() const { return arg::kb(_inst); }
+		inline bool kc() const { return arg::kc(_inst); }
 		inline unsigned int bx() const { return arg::bx(_inst); }
 		inline int sbx() const { return arg::sbx(_inst); }
 		inline unsigned int ax() const { return arg::ax(_inst); }

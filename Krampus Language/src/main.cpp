@@ -1,16 +1,16 @@
 #include "common.h"
 #include "mheap.h"
-#include "instruction.h"
+#include "data_types.h"
+
+static constexpr int size = sizeof(kpl::MemoryBlock);
 
 int main(int argc, char** argv)
 {
 	kpl::MemoryHeap heap;
 
-	kpl::inst::Instruction inst;
-
-	inst.a(1).b(2).c(-1);
-
-	std::cout << inst.c() << std::endl;
+	kpl::Value obj = heap.make_object();
+	obj.object().insert({ "hola", 50LL });
+	obj.object()["power"] = 50;
 
 	return 0;
 }

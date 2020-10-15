@@ -4,9 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <utility>
-#include <string>
 #include <vector>
-#include <list>
 
 #ifndef __cpp_lib_concepts
 #define __cpp_lib_concepts
@@ -14,7 +12,7 @@
 #include <concepts>
 
 
-#define __KPL_CONSTRUCT(_Object, _Type, ...) new (_Object) _Type(__VA_ARGS__)
+#define __KPL_CONSTRUCT(_Object, _Type, ...) new (_Object) _Type{ __VA_ARGS__ }
 
 
 
@@ -36,27 +34,6 @@ namespace kpl
 	typedef std::byte Byte;
 
 	typedef UInt32 InstructionCode;
-}
-
-
-
-namespace kpl
-{
-	class Value;
-
-	namespace type
-	{
-		typedef decltype(nullptr) Null;
-		typedef Int64 Integer;
-		typedef double Float;
-		typedef bool Boolean;
-		class String;
-		class Array;
-		class List;
-		class Object;
-		class Function;
-		class Userdata;
-	}
 }
 
 
