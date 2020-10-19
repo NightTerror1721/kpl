@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <utility>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <list>
@@ -42,6 +43,8 @@ namespace kpl
 
 namespace kpl
 {
+	class KPLState;
+
 	class Value;
 
 	namespace type
@@ -57,6 +60,8 @@ namespace kpl
 		class Function;
 		class Userdata;
 	}
+
+	class Chunk;
 }
 
 

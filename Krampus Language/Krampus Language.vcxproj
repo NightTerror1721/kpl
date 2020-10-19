@@ -146,14 +146,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\chunk.cpp" />
     <ClCompile Include="src\data_types.cpp" />
+    <ClCompile Include="src\instruction.cpp" />
+    <ClCompile Include="src\kplstate.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mheap.cpp" />
+    <ClCompile Include="src\opcode.cpp" />
+    <ClCompile Include="src\runtime.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\chunk.h" />
     <ClInclude Include="include\common.h" />
     <ClInclude Include="include\data_types.h" />
+    <ClInclude Include="include\instruction.h" />
+    <ClInclude Include="include\kplstate.h" />
     <ClInclude Include="include\mheap.h" />
+    <ClInclude Include="include\opcode.h" />
+    <ClInclude Include="include\runtime.h" />
     <ClInclude Include="include\static_array.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

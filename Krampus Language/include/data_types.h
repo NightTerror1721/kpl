@@ -126,7 +126,25 @@ namespace kpl
 		inline type::Object& object() const { return *_value.object; }
 		inline type::Function& function() const { return *_value.function; }
 		inline type::Userdata& userdata() const { return *_value.userdata; }
+
+
+
+		void set_property(const std::string& name, const Value& value);
+		const Value& get_property(const std::string& name) const;
+		void del_property(const std::string& name);
+
+		std::string to_string() const;
 	};
+
+	namespace type::literal
+	{
+		extern const Value Null;
+		extern const Value True;
+		extern const Value False;
+		extern const Value One;
+		extern const Value Zero;
+		extern const Value Minusone;
+	}
 }
 
 
@@ -174,6 +192,8 @@ namespace kpl::type
 
 		inline Value& operator[] (Offset index) { return _array[index]; }
 		inline const Value& operator[] (Offset index) const { return _array[index]; }
+
+		std::string to_string() const;
 	};
 }
 
@@ -189,6 +209,8 @@ namespace kpl::type
 	public:
 		inline List() : list{} {}
 		~List() = default;
+
+		std::string to_string() const;
 	};
 }
 
@@ -204,6 +226,8 @@ namespace kpl::type
 	public:
 		inline Object() : unordered_map{} {}
 		~Object() = default;
+
+		std::string to_string() const;
 	};
 }
 
@@ -213,7 +237,31 @@ namespace kpl::type
 {
 	class Function : public KPLVirtualObject
 	{
+	private:
+		Chunk* _chunk;
+		Value _locals;
 
+	public:
+		static void _mheap_delete(void* block);
+
+	public:
+		Function(Chunk& chunk, Value* locals = nullptr) : 
+			_chunk{ &chunk },
+			_locals{ locals ? *locals : nullptr }
+		{}
+		~Function() = default;
+
+		std::string to_string() const;
+
+		inline Chunk& chunk() { return *_chunk; }
+		inline const Chunk& chunk() const { return *_chunk; }
+
+		inline Value& locals() { return _locals; }
+		inline const Value& locals() const { return _locals; }
+
+		inline void set_local(const std::string& name, const Value& value) { _locals.set_property(name, value); }
+		inline const Value& get_local(const std::string& name) const { return _locals.get_property(name); }
+		inline void del_local(const std::string& name) { _locals.del_property(name); }
 	};
 }
 
@@ -223,7 +271,8 @@ namespace kpl::type
 {
 	class Userdata : public KPLVirtualObject
 	{
-
+	public:
+		std::string to_string() const;
 	};
 }
 
