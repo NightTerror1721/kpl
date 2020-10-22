@@ -18,7 +18,7 @@ namespace kpl
 		chunk->_code_count = _instructions.size();
 		chunk->_register_count = static_cast<unsigned int>(_registers);
 
-		chunk->_data = utils::malloc(Chunk::chunk_object_size(chunk->_constant_count, chunk->_chunk_count, chunk->_register_count));
+		chunk->_data = utils::malloc(Chunk::chunk_object_size(chunk->_constant_count, chunk->_chunk_count, chunk->_code_count));
 
 		chunk->_constants = reinterpret_cast<Value*>(chunk->_data);
 		chunk->_chunks = reinterpret_cast<Chunk**>(chunk->_constants + chunk->_constant_count);
@@ -28,7 +28,8 @@ namespace kpl
 		for (const Value& c : _constants)
 			chunk->_constants[offset++] = c;
 
-		std::memcpy(chunk->_chunks, _chunks.data(), chunk->_chunk_count);
+		if(!_chunks.empty())
+			std::memcpy(chunk->_chunks, _chunks.data(), chunk->_chunk_count);
 		
 		offset = 0;
 		for (const inst::Instruction& inst : _instructions)

@@ -8,6 +8,57 @@
 
 namespace kpl
 {
+	namespace runtime { class Arguments; };
+
+	class WeakValueReference
+	{
+	private:
+		Value* _value;
+
+	public:
+		WeakValueReference() = default;
+		WeakValueReference(const WeakValueReference&) = default;
+		WeakValueReference(WeakValueReference&&) noexcept = default;
+		~WeakValueReference() = default;
+
+		WeakValueReference& operator= (const WeakValueReference&) = default;
+		WeakValueReference& operator= (WeakValueReference&&) noexcept = default;
+
+		inline WeakValueReference(Value& value) : _value{ &value } {}
+
+		inline WeakValueReference& operator= (Value& right) { return _value = &right, *this; }
+
+		inline operator Value& () const { return *_value; }
+		inline operator const Value& () const { return *_value; }
+
+		inline Value* operator-> () const { return _value; }
+	};
+
+	class ConstWeakValueReference
+	{
+	private:
+		const Value* _value;
+
+	public:
+		ConstWeakValueReference() = default;
+		ConstWeakValueReference(const ConstWeakValueReference&) = default;
+		ConstWeakValueReference(ConstWeakValueReference&&) noexcept = default;
+		~ConstWeakValueReference() = default;
+
+		ConstWeakValueReference& operator= (const ConstWeakValueReference&) = default;
+		ConstWeakValueReference& operator= (ConstWeakValueReference&&) noexcept = default;
+
+		inline ConstWeakValueReference(Value& value) : _value{ &value } {}
+		inline ConstWeakValueReference(const Value& value) : _value{ &value } {}
+
+		inline ConstWeakValueReference& operator= (Value& right) { return _value = &right, *this; }
+		inline ConstWeakValueReference& operator= (const Value& right) { return _value = &right, *this; }
+
+		inline operator const Value& () const { return *_value; }
+
+		inline const Value* operator-> () const { return _value; }
+	};
+
 	enum class DataType
 	{
 		Null,
@@ -20,6 +71,13 @@ namespace kpl
 		Object,
 		Function,
 		Userdata
+	};
+
+	class BadValueOperation : std::exception
+	{
+		inline BadValueOperation() : exception() {}
+		inline BadValueOperation(const char* msg) : exception(msg) {}
+		inline BadValueOperation(const std::string& msg) : exception(msg.c_str()) {}
 	};
 
 	class Value
@@ -129,11 +187,74 @@ namespace kpl
 
 
 
+		Value operator+ (const Value& right) const;
+		Value operator- (const Value& right) const;
+		Value operator* (const Value& right) const;
+		Value operator/ (const Value& right) const;
+		Value operator% (const Value& right) const;
+
+		Value operator== (const Value& right) const;
+		Value operator!= (const Value& right) const;
+		Value operator> (const Value& right) const;
+		Value operator< (const Value& right) const;
+		Value operator>= (const Value& right) const;
+		Value operator<= (const Value& right) const;
+
+		Value operator>> (const Value& right) const;
+		Value operator<< (const Value& right) const;
+		Value operator& (const Value& right) const;
+		Value operator| (const Value& right) const;
+		Value operator^ (const Value& right) const;
+
+		Value operator! () const;
+		Value operator- () const;
+		Value operator~ () const;
+
+		Value integral_division(const Value& right) const;
+
+		Value length() const;
+
+
+
+		inline void invalidate()
+		{
+			try_dec_ref();
+			_type = DataType::Null;
+		}
+
 		void set_property(const std::string& name, const Value& value);
 		const Value& get_property(const std::string& name) const;
 		void del_property(const std::string& name);
 
+		inline void set_property(const Value& name, const Value& value)
+		{
+			if(name._type == DataType::String)
+				set_property(name._value.string, value);
+			else set_property(name.to_string(), value);
+		}
+		const Value& get_property(const Value& name) const
+		{
+			if (name._type == DataType::String)
+				return get_property(name._value.string);
+			return get_property(name.to_string());
+		}
+		void del_property(const Value& name)
+		{
+			if (name._type == DataType::String)
+				del_property(name._value.string);
+			else del_property(name.to_string());
+		}
+
 		std::string to_string() const;
+
+		Int64 to_integer() const;
+
+		Value runtime_call(const runtime::Arguments& args) const;
+
+		inline Value runtime_invoke(const std::string name, const runtime::Arguments& args)
+		{
+			get_property(name).ca
+		}
 	};
 
 	namespace type::literal
@@ -220,14 +341,44 @@ namespace kpl::type
 {
 	class Object : public KPLVirtualObject, public std::unordered_map<std::string, Value>
 	{
+	private:
+		Value _class;
+
 	public:
 		static void _mheap_delete(void* block);
 
 	public:
-		inline Object() : unordered_map{} {}
+		inline Object(const Value& class_) : unordered_map{}, _class{ class_ } {}
 		~Object() = default;
 
+		inline const Value& get_class() const { return _class; }
+
 		std::string to_string() const;
+
+		const Value& get_property(const std::string& name) const;
+
+		inline void set_property(const std::string& name, const Value& value) { insert({ name, value }); }
+		inline void set_property(const Value& name, const Value& value)
+		{
+			if (name.type() == DataType::String)
+				insert({ name.string(), value });
+			else insert({ name.to_string(), value });
+		}
+
+		inline const Value& get_property(const Value& name) const
+		{
+			if (name.type() == DataType::String)
+				return get_property(name.string());
+			return get_property(name.to_string());
+		}
+
+		inline void del_property(const std::string& name) { erase(name); }
+		inline void del_property(const Value& name)
+		{
+			if (name.type() == DataType::String)
+				erase( name.string() );
+			else erase( name.to_string() );
+		}
 	};
 }
 
@@ -262,6 +413,10 @@ namespace kpl::type
 		inline void set_local(const std::string& name, const Value& value) { _locals.set_property(name, value); }
 		inline const Value& get_local(const std::string& name) const { return _locals.get_property(name); }
 		inline void del_local(const std::string& name) { _locals.del_property(name); }
+
+		inline void set_local(const Value& name, const Value& value) { _locals.set_property(name, value); }
+		inline const Value& get_local(const Value& name) const { return _locals.get_property(name); }
+		inline void del_local(const Value& name) { _locals.del_property(name); }
 	};
 }
 

@@ -117,6 +117,9 @@ namespace kpl
 		inline InstructionCode instruction(Offset index) const { return _code[index]; }
 		inline Size instruction_count() const { return _code_count; }
 
+		inline ChunkBuilder builder() { return { this }; }
+		static inline ChunkBuilder builder(Chunk* chunk) { return { chunk }; }
+
 		friend class ChunkBuilder;
 	};
 }

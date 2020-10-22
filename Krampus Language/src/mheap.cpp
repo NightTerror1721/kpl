@@ -142,6 +142,12 @@ namespace kpl
 	type::Object* MemoryHeap::make_object()
 	{
 		MemoryBlock* block = instanceof(type::Object, &type::Object::_mheap_delete);
-		return construct(block, type::Object);
+		return construct(block, type::Object, type::literal::Null);
+	}
+
+	type::Object* MemoryHeap::make_object(const Value& class_)
+	{
+		MemoryBlock* block = instanceof(type::Object, &type::Object::_mheap_delete);
+		return construct(block, type::Object, class_);
 	}
 }

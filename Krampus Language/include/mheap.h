@@ -105,5 +105,6 @@ namespace kpl
 		type::List* make_list();
 
 		type::Object* make_object();
+		type::Object* make_object(const Value& class_);
 	};
 }

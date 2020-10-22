@@ -2,7 +2,9 @@
 
 #include <unordered_map>
 #include <algorithm>
+#include <exception>
 #include <iostream>
+#include <compare>
 #include <utility>
 #include <sstream>
 #include <string>
@@ -139,4 +141,61 @@ namespace kpl::utils
 			return std::min(max, std::max(static_cast<_ValueTy>(min), value));
 		else return std::min(static_cast<_ValueTy>(max), std::max(static_cast<_ValueTy>(min), value));
 	}
+}
+
+
+
+namespace kpl::utils
+{
+	template <Int64 _Max, Int64 _Min = 0>
+	class RangedInt
+	{
+	public:
+		static constexpr Int64 max = _Max;
+		static constexpr Int64 min = _Min;
+
+	private:
+		Int64 _value = min;
+
+	public:
+		RangedInt() = default;
+		RangedInt(const RangedInt&) = default;
+		RangedInt(RangedInt&&) noexcept = default;
+		~RangedInt() = default;
+
+		RangedInt& operator= (const RangedInt&) = default;
+		RangedInt& operator= (RangedInt&&) noexcept = default;
+
+		template<std::integral _Ty>
+		RangedInt(_Ty value) : _value{ clamp(static_cast<Int64>(value), min, max) } {}
+		RangedInt(bool value) : _value{ static_cast<Int64>(value) } {}
+
+		template<std::integral _Ty>
+		RangedInt& operator= (_Ty value) { return _value = clamp(static_cast<Int64>(value), min, max), *this; }
+		RangedInt& operator= (bool value) { return _value = static_cast<Int64>(value), *this; }
+
+		inline operator bool() const { return _value; }
+		inline bool operator! () const { return !_value; }
+
+		bool operator== (const RangedInt&) const = default;
+		auto operator<=> (const RangedInt&) const = default;
+
+		template<std::integral _Ty>
+		operator _Ty() const { return static_cast<_Ty>(_value); }
+
+		template<std::integral _Ty>
+		friend inline bool operator== (const RangedInt& left, _Ty right) { return left._value == static_cast<Int64>(right); }
+		template<std::integral _Ty>
+		friend inline bool operator== (_Ty left, const RangedInt& right) { return right._value == static_cast<Int64>(left); }
+
+		template<std::integral _Ty>
+		friend inline bool operator!= (const RangedInt& left, _Ty right) { return left._value != static_cast<Int64>(right); }
+		template<std::integral _Ty>
+		friend inline bool operator!= (_Ty left, const RangedInt& right) { return right._value != static_cast<Int64>(left); }
+
+		template<std::integral _Ty>
+		friend std::strong_ordering operator<=> (const RangedInt& left, _Ty right) { return left._value <=> static_cast<Int64>(right); }
+		template<std::integral _Ty>
+		friend std::strong_ordering operator<=> (_Ty left, const RangedInt& right) { return right._value <=> static_cast<Int64>(left); }
+	};
 }

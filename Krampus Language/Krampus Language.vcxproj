@@ -162,6 +162,7 @@
     <ClInclude Include="include\instruction.h" />
     <ClInclude Include="include\kplstate.h" />
     <ClInclude Include="include\mheap.h" />
+    <ClInclude Include="include\object_utils.h" />
     <ClInclude Include="include\opcode.h" />
     <ClInclude Include="include\runtime.h" />
     <ClInclude Include="include\static_array.h" />
