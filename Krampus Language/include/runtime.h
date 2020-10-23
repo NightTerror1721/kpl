@@ -94,15 +94,21 @@ namespace kpl::runtime
 	class Arguments
 	{
 	private:
-		const Register* _self;
+		const Register* const _self;
 		const Register* const _regs;
 		const Size _size;
 
 	public:
-		inline Arguments(const Register* args, Size count, const Register* self) :
-			_self{ self },
+		inline Arguments(const Register* args, Size count) :
+			_self{ &type::literal::Null },
 			_regs{ args },
 			_size{ count }
+		{}
+
+		inline Arguments(const Arguments& args, const Value& self) :
+			_self{ &self },
+			_regs{ args._regs },
+			_size{ args._size }
 		{}
 
 		inline operator bool() const { return _size; }
@@ -121,7 +127,7 @@ namespace kpl::runtime
 	class Parameters
 	{
 	private:
-		const Value* _self = &type::literal::Null;
+		mutable const Value* _self = &type::literal::Null;
 		std::vector<const Value*> _pars;
 
 	private:
@@ -157,6 +163,8 @@ namespace kpl::runtime
 
 		Parameters(const std::initializer_list<ConstWeakValueReference> pars);
 
+		inline Parameters(const Value& arg) : Parameters{ arg } {}
+
 		inline operator bool() const { return !_pars.empty(); }
 		inline bool operator! () const { return _pars.empty(); }
 
@@ -174,7 +182,8 @@ namespace kpl::runtime
 		void fill(unsigned int from, unsigned int to, const Value& value = type::literal::Null);
 
 		inline Parameters& self(const Value& value) { return _self = &value, *this; }
-		inline const Value& self() const { return _self; }
+		inline const Parameters& self(const Value& value) const { return _self = &value, *this; }
+		inline const Value& self() const { return *_self; }
 
 		inline const std::vector<const Value*>& vector() const { return _pars; }
 	};

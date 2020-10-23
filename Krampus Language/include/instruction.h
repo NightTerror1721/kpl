@@ -191,6 +191,11 @@ namespace kpl::inst
 			return Instruction().opcode(opcode::id::CALL).a(func).b(args);
 		}
 
+		static inline Instruction invoke(A func, KB symbol, C args)
+		{
+			return Instruction().opcode(opcode::id::INVOKE).a(func).b(symbol).c(args);
+		}
+
 		static inline Instruction return_(A return_any, KB value)
 		{
 			return Instruction().opcode(opcode::id::CALL).a(return_any).b(value);
@@ -209,8 +214,8 @@ namespace kpl::inst
 		struct Node
 		{
 			Instruction instruction;
-			Node* next;
-			Node* prev;
+			Node* next = nullptr;
+			Node* prev = nullptr;
 		};
 
 	public:

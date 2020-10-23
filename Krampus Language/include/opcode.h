@@ -27,6 +27,7 @@ namespace kpl::opcode
 
 
 		CALL,		// A B
+		INVOKE,		// A KB C
 		RETURN,		// A KB
 	};
 }

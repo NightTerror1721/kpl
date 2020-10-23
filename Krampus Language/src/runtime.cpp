@@ -347,10 +347,14 @@ namespace kpl::runtime
 				}
 				else
 				{
-					callable.runtime_call({ &R(A), B, &type::literal::Null });
+					callable.runtime_call(state, { (&callable + 1), B });
 				}
 			} end_inst;
 
+			case opcode::id::INVOKE: {
+				const Value& object = R(A);
+				object.runtime_invoke(state, RKB, { (&object + 1), C });
+			} end_inst;
 
 			case opcode::id::RETURN:
 				if (A)

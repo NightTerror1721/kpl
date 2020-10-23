@@ -8,7 +8,7 @@
 
 namespace kpl
 {
-	namespace runtime { class Arguments; };
+	namespace runtime { class Arguments; class Parameters; };
 
 	class WeakValueReference
 	{
@@ -73,8 +73,28 @@ namespace kpl
 		Userdata
 	};
 
+	static constexpr const char* data_type_name(DataType type)
+	{
+		switch (type)
+		{
+			case DataType::Null: return "null";
+			case DataType::Integer: "integer";
+			case DataType::Float: "float";
+			case DataType::Boolean: "boolean";
+			case DataType::String: "string";
+			case DataType::Array: "array";
+			case DataType::List: "list";
+			case DataType::Object: return "object";
+			case DataType::Function: "function";
+			case DataType::Userdata: "userdata";
+		}
+
+		return "null";
+	}
+
 	class BadValueOperation : std::exception
 	{
+	public:
 		inline BadValueOperation() : exception() {}
 		inline BadValueOperation(const char* msg) : exception(msg) {}
 		inline BadValueOperation(const std::string& msg) : exception(msg.c_str()) {}
@@ -187,33 +207,33 @@ namespace kpl
 
 
 
-		Value operator+ (const Value& right) const;
-		Value operator- (const Value& right) const;
-		Value operator* (const Value& right) const;
-		Value operator/ (const Value& right) const;
-		Value operator% (const Value& right) const;
+		Value runtime_add(const Value& right, KPLState& state) const;
+		Value runtime_sub(const Value& right, KPLState& state) const;
+		Value runtime_mul(const Value& right, KPLState& state) const;
+		Value runtime_div(const Value& right, KPLState& state) const;
+		Value runtime_idiv(const Value& right, KPLState& state) const;
+		Value runtime_mod(const Value& right, KPLState& state) const;
 
-		Value operator== (const Value& right) const;
-		Value operator!= (const Value& right) const;
-		Value operator> (const Value& right) const;
-		Value operator< (const Value& right) const;
-		Value operator>= (const Value& right) const;
-		Value operator<= (const Value& right) const;
+		Value runtime_eq(const Value& right, KPLState& state) const;
+		Value runtime_ne(const Value& right, KPLState& state) const;
+		Value runtime_gr(const Value& right, KPLState& state) const;
+		Value runtime_ls(const Value& right, KPLState& state) const;
+		Value runtime_ge(const Value& right, KPLState& state) const;
+		Value runtime_le(const Value& right, KPLState& state) const;
 
-		Value operator>> (const Value& right) const;
-		Value operator<< (const Value& right) const;
-		Value operator& (const Value& right) const;
-		Value operator| (const Value& right) const;
-		Value operator^ (const Value& right) const;
+		Value runtime_shl(const Value& right, KPLState& state) const;
+		Value runtime_shr(const Value& right, KPLState& state) const;
+		Value runtime_band(const Value& right, KPLState& state) const;
+		Value runtime_bor(const Value& right, KPLState& state) const;
+		Value runtime_xor(const Value& right, KPLState& state) const;
 
-		Value operator! () const;
-		Value operator- () const;
-		Value operator~ () const;
+		Value runtime_length(KPLState& state) const;
+		Value runtime_not(KPLState& state) const;
+		Value runtime_bnot(KPLState& state) const;
+		Value runtime_neg(KPLState& state) const;
 
-		Value integral_division(const Value& right) const;
-
-		Value length() const;
-
+		Value runtime_subscrived_get(const Value& index, MemoryHeap& heap) const;
+		Value runtime_subscrived_set(const Value& index, const Value& value, MemoryHeap& heap);
 
 
 		inline void invalidate()
@@ -249,12 +269,14 @@ namespace kpl
 
 		Int64 to_integer() const;
 
-		Value runtime_call(const runtime::Arguments& args) const;
+		Value runtime_call(KPLState& state, const runtime::Arguments& args) const;
+		Value call(KPLState& state, const runtime::Parameters& args) const;
 
-		inline Value runtime_invoke(const std::string name, const runtime::Arguments& args)
-		{
-			get_property(name).ca
-		}
+		Value runtime_invoke(KPLState& state, const std::string& name, const runtime::Arguments& args) const;
+		Value runtime_invoke(KPLState& state, const Value& name, const runtime::Arguments& args) const;
+
+		Value invoke(KPLState& state, const std::string& name, const runtime::Parameters& args) const;
+		Value invoke(KPLState& state, const Value& name, const runtime::Parameters& args) const;
 	};
 
 	namespace type::literal
@@ -315,6 +337,9 @@ namespace kpl::type
 		inline const Value& operator[] (Offset index) const { return _array[index]; }
 
 		std::string to_string() const;
+
+		static Value runtime_concat(const Array& left, const Array& right, MemoryHeap& heap);
+		static Value runtime_concat(const Array& left, const List& right, MemoryHeap& heap);
 	};
 }
 
@@ -331,7 +356,12 @@ namespace kpl::type
 		inline List() : list{} {}
 		~List() = default;
 
+		inline List(const List& list) : list{ list } {}
+
 		std::string to_string() const;
+
+		static Value runtime_concat(const List& left, const List& right, MemoryHeap& heap);
+		static Value runtime_concat(const List& left, const Array& right, MemoryHeap& heap);
 	};
 }
 

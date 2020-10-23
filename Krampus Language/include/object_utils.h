@@ -28,6 +28,9 @@ namespace kpl::obj::special_property
 	static constexpr const char* operator_neg = "__neg__";
 	static constexpr const char* operator_xor = "__xor__";
 
+	static constexpr const char* operator_get = "__get__";
+	static constexpr const char* operator_set = "__set__";
+
 
 	static constexpr const char* constructor = "__constructor__";
 }

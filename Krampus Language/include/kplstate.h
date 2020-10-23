@@ -63,5 +63,8 @@ namespace kpl
 	public:
 		KPLState() = default;
 		~KPLState() = default;
+
+		inline MemoryHeap& heap() { return _heap; }
+		inline const MemoryHeap& heap() const { return _heap; }
 	};
 }

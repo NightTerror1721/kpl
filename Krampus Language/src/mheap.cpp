@@ -137,6 +137,13 @@ namespace kpl
 		return construct(block, type::List);
 	}
 
+	type::List* MemoryHeap::make_list(const type::List& src)
+	{
+		MemoryBlock* block = instanceof(type::List, &type::List::_mheap_delete);
+		return construct(block, type::List, src);
+	}
+
+
 
 
 	type::Object* MemoryHeap::make_object()

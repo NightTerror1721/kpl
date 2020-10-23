@@ -1,34 +1,105 @@
 #include "data_types.h"
 #include "runtime.h"
+#include "kplstate.h"
+#include "object_utils.h"
 
 namespace kpl
 {
-	/*Value Value::operator+ (const Value& right) const;
-	Value Value::operator- (const Value& right) const;
-	Value Value::operator* (const Value& right) const;
-	Value Value::operator/ (const Value& right) const;
-	Value Value::operator% (const Value& right) const;
+	static inline BadValueOperation op_error(const char* operation, const Value& left, const Value& right)
+	{
+		return { std::string("Cannot") + operation + " " + data_type_name(left.type()) + "with " + data_type_name(right.type()) };
+	}
 
-	Value Value::operator== (const Value& right) const;
-	Value Value::operator!= (const Value& right) const;
-	Value Value::operator> (const Value& right) const;
-	Value Value::operator< (const Value& right) const;
-	Value Value::operator>= (const Value& right) const;
-	Value Value::operator<= (const Value& right) const;
 
-	Value Value::operator>> (const Value& right) const;
-	Value Value::operator<< (const Value& right) const;
-	Value Value::operator& (const Value& right) const;
-	Value Value::operator| (const Value& right) const;
-	Value Value::operator^ (const Value& right) const;
+	Value Value::runtime_add(const Value& right, KPLState& state) const
+	{
+		switch (_type)
+		{
+			case DataType::Null: goto error;
+			case DataType::Integer: {
+				switch (right._type)
+				{
+					case DataType::Integer:
+						return _value.integral + right._value.integral;
+					case DataType::Float:
+						return static_cast<double>(_value.integral) + right._value.floating;
+					default: goto error;
+				}
+			} break;
+			case DataType::Float:  {
+				switch (right._type)
+				{
+					case DataType::Integer:
+						return _value.floating + static_cast<double>(right._value.integral);
+					case DataType::Float:
+						return _value.floating + right._value.floating;
+					default: goto error;
+				}
+			} break;
+			case DataType::Boolean: goto error;
+			case DataType::String: {
+				switch (right._type)
+				{
+					case DataType::String:
+						return state.heap().make_string(*_value.string + *right._value.string);
+					default: goto error;
+				}
+			} break;
+			case DataType::Array: {
+				switch (right._type)
+				{
+					case DataType::Array:
+						return type::Array::runtime_concat(*_value.array, *right._value.array, state.heap());
+					case DataType::List:
+						return type::Array::runtime_concat(*_value.array, *right._value.list, state.heap());
+					default: goto error;
+				}
+			} break;
+			case DataType::List: {
+				switch (right._type)
+				{
+					case DataType::Array:
+						return type::List::runtime_concat(*_value.list, *right._value.array, state.heap());
+					case DataType::List:
+						return type::List::runtime_concat(*_value.list, *right._value.list, state.heap());
+					default: goto error;
+				}
+			} break;
+			case DataType::Object:
+				return invoke(state, std::string(obj::special_property::operator_add), right);
+			case DataType::Function: break;
+			case DataType::Userdata: break;
+		}
 
-	Value Value::operator! () const;
-	Value Value::operator- () const;
-	Value Value::operator~ () const;
+		error:
+		throw op_error("add", *this, right);
+	}
+	//Value Value::runtime_sub(const Value& right, KPLState& state) const;
+	//Value Value::runtime_mul(const Value& right, KPLState& state) const;
+	//Value Value::runtime_div(const Value& right, KPLState& state) const;
+	//Value Value::runtime_idiv(const Value& right, KPLState& state) const;
+	//Value Value::runtime_mod(const Value& right, KPLState& state) const;
 
-	Value Value::integral_division(const Value& right) const;
+	//Value Value::runtime_eq(const Value& right, KPLState& state) const;
+	//Value Value::runtime_ne(const Value& right, KPLState& state) const;
+	//Value Value::runtime_gr(const Value& right, KPLState& state) const;
+	//Value Value::runtime_ls(const Value& right, KPLState& state) const;
+	//Value Value::runtime_ge(const Value& right, KPLState& state) const;
+	//Value Value::runtime_le(const Value& right, KPLState& state) const;
 
-	Value Value::length() const;*/
+	//Value Value::runtime_shl(const Value& right, KPLState& state) const;
+	//Value Value::runtime_shr(const Value& right, KPLState& state) const;
+	//Value Value::runtime_band(const Value& right, KPLState& state) const;
+	//Value Value::runtime_bor(const Value& right, KPLState& state) const;
+	//Value Value::runtime_xor(const Value& right, KPLState& state) const;
+
+	//Value Value::runtime_length(KPLState& state) const;
+	//Value Value::runtime_not(KPLState& state) const;
+	//Value Value::runtime_bnot(KPLState& state) const;
+	//Value Value::runtime_neg(KPLState& state) const;
+
+	//Value Value::runtime_subscrived_get(const Value& index, MemoryHeap& heap) const;
+	//Value Value::runtime_subscrived_set(const Value& index, const Value& value, MemoryHeap& heap);
 
 
 
@@ -132,9 +203,34 @@ namespace kpl
 
 
 
-	Value Value::runtime_call(const runtime::Arguments& args) const
+	Value Value::runtime_call(KPLState& state, const runtime::Arguments& args) const
 	{
 		return nullptr;
+	}
+
+	Value Value::call(KPLState& state, const runtime::Parameters& args) const
+	{
+		return nullptr;
+	}
+
+	Value Value::runtime_invoke(KPLState& state, const std::string& name, const runtime::Arguments& args) const
+	{
+		return get_property(name).runtime_call(state, { args, *this });
+	}
+
+	Value Value::runtime_invoke(KPLState& state, const Value& name, const runtime::Arguments& args) const
+	{
+		return get_property(name).runtime_call(state, { args, *this });
+	}
+
+	Value Value::invoke(KPLState& state, const std::string& name, const runtime::Parameters& args) const
+	{
+		return get_property(name).call(state, args.self(*this));
+	}
+
+	Value Value::invoke(KPLState& state, const Value& name, const runtime::Parameters& args) const
+	{
+		return get_property(name).call(state, args.self(*this));
 	}
 }
 
@@ -216,6 +312,40 @@ namespace kpl::type
 		
 		return ss << "]", ss.str();
 	}
+
+	Value Array::runtime_concat(const Array& left, const Array& right, MemoryHeap& heap)
+	{
+		Value value = heap.make_array(left._length + right._length);
+		Array& array = value.array();
+
+		if (array._length > 0)
+		{
+			Offset offset = 0;
+			for (offset = 0; offset < left._length; ++offset)
+				array._array[offset] = left._array[offset];
+
+			for (Offset i = 0; i < right._length; ++i)
+				array._array[offset + i] = right._array[i];
+		}
+		return value;
+	}
+
+	Value Array::runtime_concat(const Array& left, const List& right, MemoryHeap& heap)
+	{
+		Value value = heap.make_array(left._length + right.size());
+		Array& array = value.array();
+
+		if (array._length > 0)
+		{
+			Offset offset = 0;
+			for (offset = 0; offset < left._length; ++offset)
+				array._array[offset] = left._array[offset];
+
+			for (const Value& elem : right)
+				array._array[offset++] = elem;
+		}
+		return value;
+	}
 }
 
 
@@ -242,6 +372,32 @@ namespace kpl::type
 		}
 
 		return ss << "]", ss.str();
+	}
+
+	Value List::runtime_concat(const List& left, const List& right, MemoryHeap& heap)
+	{
+		Value value = heap.make_list(left);
+		List& list = value.list();
+
+		for (const Value& elem : right)
+			list.push_back(elem);
+
+		return value;
+	}
+
+	Value List::runtime_concat(const List& left, const Array& right, MemoryHeap& heap)
+	{
+		Value value = heap.make_list(left);
+		List& list = value.list();
+
+		if (!right.empty())
+		{
+			Size len = right.length();
+			for (Offset i = 0; i < len; ++i)
+				list.push_back(right[i]);
+		}
+
+		return value;
 	}
 }
 

@@ -103,6 +103,7 @@ namespace kpl
 		type::Array* make_array(const std::initializer_list<Value>& args);
 
 		type::List* make_list();
+		type::List* make_list(const type::List& src);
 
 		type::Object* make_object();
 		type::Object* make_object(const Value& class_);
