@@ -6,11 +6,57 @@
 
 namespace kpl
 {
+	class ChunkConstant
+	{
+	public:
+		enum class Type { Null, Integer, Float, Boolean, String };
+
+	private:
+		Type _type;
+		union {
+			decltype(nullptr) null;
+			Int64 integral;
+			double floating;
+			bool boolean;
+			struct { const char* string; Size string_len; };
+		} _value;
+
+	public:
+		inline ChunkConstant() : _type{ Type::Null }, _value{ .null = nullptr } {}
+		inline ChunkConstant(decltype(nullptr)) : _type{ Type::Null }, _value{ .null = nullptr } {}
+		inline ChunkConstant(Int64 value) : _type{ Type::Integer }, _value{ .integral = value } {}
+		inline ChunkConstant(float value) : _type{ Type::Float }, _value{ .floating = static_cast<double>(value) } {}
+		inline ChunkConstant(double value) : _type{ Type::Float }, _value{ .floating = value } {}
+		inline ChunkConstant(bool value) : _type{ Type::Boolean }, _value{ .boolean = value } {}
+
+		template<std::integral _Ty>
+		inline ChunkConstant(_Ty value) : _type{ Type::Integer }, _value{ .integral = static_cast<Int64>(value) } {}
+
+		inline Type type() const { return _type; }
+
+		ChunkConstant(const char* string);
+		ChunkConstant(const char* string, Size count);
+		ChunkConstant(const std::string& string);
+
+		ChunkConstant(const Value& value);
+
+		ChunkConstant(const ChunkConstant& right);
+		ChunkConstant(ChunkConstant&& right) noexcept;
+		~ChunkConstant();
+
+		ChunkConstant& operator= (const ChunkConstant& right);
+		ChunkConstant& operator= (ChunkConstant&& right) noexcept;
+
+		Value to_value() const;
+	};
+
+
+
 	class ChunkBuilder
 	{
 	private:
 		Chunk* _chunk = nullptr;
-		std::vector<Value> _constants;
+		std::vector<ChunkConstant> _constants;
 		std::vector<Chunk*> _chunks;
 		std::vector<inst::Instruction> _instructions;
 		UInt8 _registers;
@@ -32,8 +78,8 @@ namespace kpl
 			_registers{ 0 }
 		{}
 
-		inline ChunkBuilder& constants(const std::vector<Value>& constants) { return _constants = constants, *this; }
-		inline ChunkBuilder& constants(std::vector<Value>&& constants) { return _constants = std::move(constants), *this; }
+		inline ChunkBuilder& constants(const std::vector<ChunkConstant>& constants) { return _constants = constants, *this; }
+		inline ChunkBuilder& constants(std::vector<ChunkConstant>&& constants) { return _constants = std::move(constants), *this; }
 
 		inline ChunkBuilder& chunks(const std::vector<Chunk*>& chunks) { return _chunks = chunks, *this; }
 		inline ChunkBuilder& chunks(std::vector<Chunk*>&& chunks) { return _chunks = std::move(chunks), *this; }
@@ -47,8 +93,8 @@ namespace kpl
 		Chunk* build(Chunk* chunk = nullptr);
 
 	public:
-		inline ChunkBuilder& operator<< (const std::vector<Value>& right) { return constants(right); }
-		inline ChunkBuilder& operator<< (std::vector<Value>&& right) { return constants(std::move(right)); }
+		inline ChunkBuilder& operator<< (const std::vector<ChunkConstant>& right) { return constants(right); }
+		inline ChunkBuilder& operator<< (std::vector<ChunkConstant>&& right) { return constants(std::move(right)); }
 
 		inline ChunkBuilder& operator<< (const std::vector<Chunk*>& right) { return chunks(right); }
 		inline ChunkBuilder& operator<< (std::vector<Chunk*>&& right) { return chunks(std::move(right)); }

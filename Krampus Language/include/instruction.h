@@ -62,6 +62,8 @@ namespace kpl::inst
 		Instruction& operator= (const Instruction&) = default;
 		Instruction& operator= (Instruction&&) noexcept = default;
 
+		std::ostream& dump(std::ostream& os) const;
+
 		Instruction& b(int value);
 		Instruction& c(int value);
 		Instruction& sbx(int value);
@@ -101,6 +103,8 @@ namespace kpl::inst
 		typedef utils::RangedInt<255, -256> KC;
 		typedef utils::RangedInt<(1 << 18) - 1> Bx;
 		typedef utils::RangedInt<(1 << 17) - 1, -((1 << 17) - 1)> sBx;
+		typedef utils::RangedInt<(1 << 26) - 1> Ax;
+		typedef utils::RangedInt<(1 << 25) - 1, -((1 << 25) - 1)> sAx;
 
 		static inline Instruction nop() { return Instruction().opcode(opcode::id::NOP); }
 
@@ -184,6 +188,136 @@ namespace kpl::inst
 			return Instruction().opcode(opcode::id::SELF).a(dst_reg);
 		}
 
+		static inline Instruction add(A dst_reg, KB left_reg, KC right_reg)
+		{
+			return Instruction().opcode(opcode::id::ADD).a(dst_reg).b(left_reg).c(right_reg);
+		}
+
+		static inline Instruction sub(A dst_reg, KB left_reg, KC right_reg)
+		{
+			return Instruction().opcode(opcode::id::SUB).a(dst_reg).b(left_reg).c(right_reg);
+		}
+
+		static inline Instruction mul(A dst_reg, KB left_reg, KC right_reg)
+		{
+			return Instruction().opcode(opcode::id::MUL).a(dst_reg).b(left_reg).c(right_reg);
+		}
+
+		static inline Instruction div(A dst_reg, KB left_reg, KC right_reg)
+		{
+			return Instruction().opcode(opcode::id::DIV).a(dst_reg).b(left_reg).c(right_reg);
+		}
+
+		static inline Instruction idiv(A dst_reg, KB left_reg, KC right_reg)
+		{
+			return Instruction().opcode(opcode::id::IDIV).a(dst_reg).b(left_reg).c(right_reg);
+		}
+
+		static inline Instruction mod(A dst_reg, KB left_reg, KC right_reg)
+		{
+			return Instruction().opcode(opcode::id::MOD).a(dst_reg).b(left_reg).c(right_reg);
+		}
+
+		static inline Instruction eq(KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::EQ).b(left).c(right);
+		}
+
+		static inline Instruction ne(KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::NE).b(left).c(right);
+		}
+
+		static inline Instruction gr(KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::GR).b(left).c(right);
+		}
+
+		static inline Instruction ls(KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::LS).b(left).c(right);
+		}
+
+		static inline Instruction ge(KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::GE).b(left).c(right);
+		}
+
+		static inline Instruction le(KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::LE).b(left).c(right);
+		}
+
+		static inline Instruction shl(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::SHL).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction shr(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::SHR).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction band(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::BAND).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction bor(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::BOR).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction xor_(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::XOR).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction bnot(A dst_reg, KB right)
+		{
+			return Instruction().opcode(opcode::id::BNOT).a(dst_reg).b(right);
+		}
+
+		static inline Instruction not_(A dst_reg, KB right)
+		{
+			return Instruction().opcode(opcode::id::NOT).a(dst_reg).b(right);
+		}
+
+		static inline Instruction neg(A dst_reg, KB right)
+		{
+			return Instruction().opcode(opcode::id::NEG).a(dst_reg).b(right);
+		}
+
+		static inline Instruction len(A dst_reg, KB right)
+		{
+			return Instruction().opcode(opcode::id::LEN).a(dst_reg).b(right);
+		}
+
+		static inline Instruction in(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::IN).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction instanceof(A dst_reg, KB left, KC right)
+		{
+			return Instruction().opcode(opcode::id::INSTANCEOF).a(dst_reg).b(left).c(right);
+		}
+
+		static inline Instruction get(A dst_reg, KB base, KC index)
+		{
+			return Instruction().opcode(opcode::id::INSTANCEOF).a(dst_reg).b(base).c(index);
+		}
+
+		static inline Instruction set(A base, KB index, KC value)
+		{
+			return Instruction().opcode(opcode::id::INSTANCEOF).a(base).b(index).c(value);
+		}
+
+		static inline Instruction set(Ax target)
+		{
+			return Instruction().opcode(opcode::id::INSTANCEOF).ax(target);
+		}
+
 
 
 		static inline Instruction call(A func, B args)
@@ -198,7 +332,7 @@ namespace kpl::inst
 
 		static inline Instruction return_(A return_any, KB value)
 		{
-			return Instruction().opcode(opcode::id::CALL).a(return_any).b(value);
+			return Instruction().opcode(opcode::id::RETURN).a(return_any).b(value);
 		}
 	};
 }
@@ -381,3 +515,5 @@ namespace kpl::inst
 		inline const_iterator cend() const { return &_ghost; }
 	};
 }
+
+std::ostream& operator<< (std::ostream& left, const kpl::inst::Instruction& right);

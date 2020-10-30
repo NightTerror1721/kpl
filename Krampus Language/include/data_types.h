@@ -2,63 +2,13 @@
 
 #include "common.h"
 #include "mheap.h"
+#include "params.h"
 
 #define inc_ref(_Obj) (_Obj)->increase_reference_count()
 #define dec_ref(_Obj) (_Obj)->decrease_reference_count()
 
 namespace kpl
 {
-	namespace runtime { class Arguments; class Parameters; };
-
-	class WeakValueReference
-	{
-	private:
-		Value* _value;
-
-	public:
-		WeakValueReference() = default;
-		WeakValueReference(const WeakValueReference&) = default;
-		WeakValueReference(WeakValueReference&&) noexcept = default;
-		~WeakValueReference() = default;
-
-		WeakValueReference& operator= (const WeakValueReference&) = default;
-		WeakValueReference& operator= (WeakValueReference&&) noexcept = default;
-
-		inline WeakValueReference(Value& value) : _value{ &value } {}
-
-		inline WeakValueReference& operator= (Value& right) { return _value = &right, *this; }
-
-		inline operator Value& () const { return *_value; }
-		inline operator const Value& () const { return *_value; }
-
-		inline Value* operator-> () const { return _value; }
-	};
-
-	class ConstWeakValueReference
-	{
-	private:
-		const Value* _value;
-
-	public:
-		ConstWeakValueReference() = default;
-		ConstWeakValueReference(const ConstWeakValueReference&) = default;
-		ConstWeakValueReference(ConstWeakValueReference&&) noexcept = default;
-		~ConstWeakValueReference() = default;
-
-		ConstWeakValueReference& operator= (const ConstWeakValueReference&) = default;
-		ConstWeakValueReference& operator= (ConstWeakValueReference&&) noexcept = default;
-
-		inline ConstWeakValueReference(Value& value) : _value{ &value } {}
-		inline ConstWeakValueReference(const Value& value) : _value{ &value } {}
-
-		inline ConstWeakValueReference& operator= (Value& right) { return _value = &right, *this; }
-		inline ConstWeakValueReference& operator= (const Value& right) { return _value = &right, *this; }
-
-		inline operator const Value& () const { return *_value; }
-
-		inline const Value* operator-> () const { return _value; }
-	};
-
 	enum class DataType
 	{
 		Null,
@@ -148,6 +98,8 @@ namespace kpl
 			_type = DataType::Null;
 		}
 
+		void force_destructor_call();
+
 		inline Value& operator= (type::Null) { try_dec_ref(); return _type = DataType::Null, *this; }
 		inline Value& operator= (type::Integer right) { try_dec_ref(); return _type = DataType::Integer, _value.integral = right, *this; }
 		inline Value& operator= (type::Float right) { try_dec_ref(); return _type = DataType::Float, _value.floating = right, *this; }
@@ -205,6 +157,20 @@ namespace kpl
 		inline type::Function& function() const { return *_value.function; }
 		inline type::Userdata& userdata() const { return *_value.userdata; }
 
+		inline void* addr() const { return _value.raw_ptr; }
+
+
+		inline bool isNull() const { return _type == DataType::Null; }
+		inline bool isInteger() const { return _type == DataType::Integer; }
+		inline bool isFloat() const { return _type == DataType::Float; }
+		inline bool isBoolean() const { return _type == DataType::Boolean; }
+		inline bool isString() const { return _type == DataType::String; }
+		inline bool isArray() const { return _type == DataType::Array; }
+		inline bool isList() const { return _type == DataType::List; }
+		inline bool isObject() const { return _type == DataType::Object; }
+		inline bool isFunction() const { return _type == DataType::Function; }
+		inline bool isUserdata() const { return _type == DataType::Userdata; }
+
 
 
 		Value runtime_add(const Value& right, KPLState& state) const;
@@ -232,8 +198,11 @@ namespace kpl
 		Value runtime_bnot(KPLState& state) const;
 		Value runtime_neg(KPLState& state) const;
 
-		Value runtime_subscrived_get(const Value& index, MemoryHeap& heap) const;
-		Value runtime_subscrived_set(const Value& index, const Value& value, MemoryHeap& heap);
+		Value runtime_in(const Value& right, KPLState& state) const;
+		Value runtime_instanceof(const Value& right, KPLState& state) const;
+
+		Value runtime_subscrived_get(const Value& index, KPLState& state) const;
+		Value runtime_subscrived_set(const Value& index, const Value& right, KPLState& state);
 
 
 		inline void invalidate()
@@ -267,16 +236,18 @@ namespace kpl
 
 		std::string to_string() const;
 
+		bool to_bool() const;
+
 		Int64 to_integer() const;
 
-		Value runtime_call(KPLState& state, const runtime::Arguments& args) const;
-		Value call(KPLState& state, const runtime::Parameters& args) const;
+		Value runtime_call(KPLState& state, const Value& self, const CallArguments& args = CallArguments()) const;
+		Value call(KPLState& state, const CallArguments& args = CallArguments()) const;
 
-		Value runtime_invoke(KPLState& state, const std::string& name, const runtime::Arguments& args) const;
-		Value runtime_invoke(KPLState& state, const Value& name, const runtime::Arguments& args) const;
+		Value invoke(KPLState& state, const std::string& name, const CallArguments& args = CallArguments()) const;
+		Value invoke(KPLState& state, const Value& name, const CallArguments& args = CallArguments()) const;
 
-		Value invoke(KPLState& state, const std::string& name, const runtime::Parameters& args) const;
-		Value invoke(KPLState& state, const Value& name, const runtime::Parameters& args) const;
+		inline operator bool() const { return to_bool(); }
+		inline bool operator! () const { return !to_bool(); }
 	};
 
 	namespace type::literal
@@ -287,6 +258,11 @@ namespace kpl
 		extern const Value One;
 		extern const Value Zero;
 		extern const Value Minusone;
+	}
+
+	inline Value Value::call(KPLState& state, const CallArguments& args) const
+	{
+		return runtime_call(state, type::literal::Null, args);
 	}
 }
 
@@ -302,9 +278,14 @@ namespace kpl::type
 	public:
 		inline String() : std::string() {}
 		inline String(const char* str) : std::string(str) {}
+		inline String(const char* str, Size count) : std::string(str, count) {}
 		inline String(const std::string& str) : std::string(str) {}
 		inline String(std::string&& str) : std::string(std::move(str)) {}
 		~String() = default;
+
+		static Value runtime_nclone(const String& string, Integer times, MemoryHeap& heap);
+
+		static type::Boolean runtime_in(const String& left, const Value& right);
 	};
 }
 
@@ -340,6 +321,11 @@ namespace kpl::type
 
 		static Value runtime_concat(const Array& left, const Array& right, MemoryHeap& heap);
 		static Value runtime_concat(const Array& left, const List& right, MemoryHeap& heap);
+
+		static type::Boolean runtime_eq(const Array& left, const Array& right, KPLState& state);
+		static type::Boolean runtime_ne(const Array& left, const Array& right, KPLState& state);
+
+		static type::Boolean runtime_in(const Array& left, const Value& right, KPLState& state);
 	};
 }
 
@@ -362,6 +348,11 @@ namespace kpl::type
 
 		static Value runtime_concat(const List& left, const List& right, MemoryHeap& heap);
 		static Value runtime_concat(const List& left, const Array& right, MemoryHeap& heap);
+
+		static type::Boolean runtime_eq(const List& left, const List& right, KPLState& state);
+		static type::Boolean runtime_ne(const List& left, const List& right, KPLState& state);
+
+		static type::Boolean runtime_in(const List& left, const Value& right, KPLState& state);
 	};
 }
 
@@ -373,15 +364,24 @@ namespace kpl::type
 	{
 	private:
 		Value _class;
+		Value* _parents;
+		Size _parentSize;
 
 	public:
 		static void _mheap_delete(void* block);
 
 	public:
-		inline Object(const Value& class_) : unordered_map{}, _class{ class_ } {}
-		~Object() = default;
+		inline Object() : unordered_map(), _class(), _parents(nullptr), _parentSize(0) {}
+		inline Object(const Value& class_) : unordered_map(), _class(class_), _parents(nullptr), _parentSize(0) {}
+		Object(const Value* parents, const Size count);
+		~Object();
 
 		inline const Value& get_class() const { return _class; }
+
+		inline Size get_parent_count() const { return _parentSize; }
+		inline const Value& get_parent(Offset index) const { return _parents[index]; }
+
+		bool is_instance_of(const Value& value);
 
 		std::string to_string() const;
 
@@ -409,6 +409,9 @@ namespace kpl::type
 				erase( name.string() );
 			else erase( name.to_string() );
 		}
+
+	private:
+		bool is_same_or_parent(const Value& value);
 	};
 }
 
@@ -454,10 +457,87 @@ namespace kpl::type
 
 namespace kpl::type
 {
-	class Userdata : public KPLVirtualObject
+	class Userdata
 	{
 	public:
+		class Meta
+		{
+		public:
+			virtual const Value& get_property(const std::string& name) const = 0;
+			virtual void set_property(const std::string& name, const Value& value) = 0;
+			virtual void del_property(const std::string& name) = 0;
+
+			inline const Value& get_property(const Value& name)
+			{
+				if (name.type() == DataType::String)
+					return get_property(name.string());
+				return get_property(name.to_string());
+			}
+
+			inline void set_property(const Value& name, const Value& value)
+			{
+				if (name.type() == DataType::String)
+					set_property(name.string(), value);
+				else set_property(name.to_string(), value);
+			}
+
+			inline void del_property(const Value& name)
+			{
+				if (name.type() == DataType::String)
+					del_property(name.string());
+				else del_property(name.to_string());
+			}
+
+			Value invoke(KPLState& state, const Value& self, const std::string& property_name, const CallArguments& args = CallArguments());
+			Value invoke(KPLState& state, const Value& self, const Value& property_name, const CallArguments& args = CallArguments());
+		};
+
+	private:
+		Meta* _meta;
+
+	public:
+		inline Userdata() : _meta{ nullptr } {}
+		inline Userdata(Meta* meta) : _meta{ meta } {}
+		virtual ~Userdata() = default;
+
 		std::string to_string() const;
+
+		//inline Meta* meta() const { return _meta; }
+
+	public:
+		const Value& get_property(const std::string& name) const;
+		void set_property(const std::string name, const Value& value);
+		void del_property(const std::string& name);
+
+		inline const Value& get_property(const Value& name)
+		{
+			if (name.type() == DataType::String)
+				return get_property(name.string());
+			return get_property(name.to_string());
+		}
+
+		inline void set_property(const Value& name, const Value& value)
+		{
+			if (name.type() == DataType::String)
+				set_property(name.string(), value);
+			else set_property(name.to_string(), value);
+		}
+
+		inline void del_property(const Value& name)
+		{
+			if (name.type() == DataType::String)
+				del_property(name.string());
+			else del_property(name.to_string());
+		}
+
+	public:
+		Value invoke(KPLState& state, const std::string& property_name, const CallArguments& args = CallArguments());
+		Value invoke(KPLState& state, const Value& property_name, const CallArguments& args = CallArguments());
+
+	protected:
+		virtual const Value& inner_get_property(const std::string& name) const { return literal::Null; }
+		virtual void inner_set_property(const std::string name, const Value& value) {}
+		virtual void inner_del_property(const std::string& name) {}
 	};
 }
 
@@ -470,14 +550,14 @@ namespace kpl
 	inline Value::Value(type::List* value) : _type{ DataType::List }, _value{ .list = value } { value->increase_reference_count(); }
 	inline Value::Value(type::Object* value) : _type{ DataType::Object }, _value{ .object = value } { value->increase_reference_count(); }
 	inline Value::Value(type::Function* value) : _type{ DataType::Function }, _value{ .function = value } { value->increase_reference_count(); }
-	inline Value::Value(type::Userdata* value) : _type{ DataType::Userdata }, _value{ .userdata = value } { value->increase_reference_count(); }
+	inline Value::Value(type::Userdata* value) : _type{ DataType::Userdata }, _value{ .userdata = value } {}
 
 	inline Value& Value::operator= (type::String* right) { try_dec_ref(); return _type = DataType::String, _value.string = right, inc_ref(right), * this; }
 	inline Value& Value::operator= (type::Array* right) { try_dec_ref(); return _type = DataType::Array, _value.array = right, inc_ref(right), * this; }
 	inline Value& Value::operator= (type::List* right) { try_dec_ref(); return _type = DataType::List, _value.list = right, inc_ref(right), * this; }
 	inline Value& Value::operator= (type::Object* right) { try_dec_ref(); return _type = DataType::Object, _value.object = right, inc_ref(right), * this; }
 	inline Value& Value::operator= (type::Function* right) { try_dec_ref(); return _type = DataType::Function, _value.function = right, inc_ref(right), * this; }
-	inline Value& Value::operator= (type::Userdata* right) { try_dec_ref(); return _type = DataType::Userdata, _value.userdata = right, inc_ref(right), * this; }
+	inline Value& Value::operator= (type::Userdata* right) { return _type = DataType::Userdata, _value.userdata = right, *this; }
 
 	inline void Value::try_inc_ref()
 	{
@@ -488,7 +568,6 @@ namespace kpl
 			case DataType::List: inc_ref(_value.list); break;
 			case DataType::Object: inc_ref(_value.object); break;
 			case DataType::Function: inc_ref(_value.function); break;
-			case DataType::Userdata: inc_ref(_value.userdata); break;
 		}
 	}
 	inline void Value::try_dec_ref()
@@ -500,7 +579,6 @@ namespace kpl
 			case DataType::List: dec_ref(_value.list); break;
 			case DataType::Object: dec_ref(_value.object); break;
 			case DataType::Function: dec_ref(_value.function); break;
-			case DataType::Userdata: dec_ref(_value.userdata); break;
 		}
 	}
 }

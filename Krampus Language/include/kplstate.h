@@ -49,10 +49,10 @@ namespace kpl
 
 
 
-	class KPLState
+	class KPLState : public MemoryHeap
 	{
 	public:
-		friend void runtime::execute(KPLState& state, Function& function, const Parameters& args);
+		friend Value runtime::execute(KPLState& state, Function& function, const Value& self, const CallArguments& args);
 
 	private:
 		MemoryHeap _heap;
@@ -63,8 +63,5 @@ namespace kpl
 	public:
 		KPLState() = default;
 		~KPLState() = default;
-
-		inline MemoryHeap& heap() { return _heap; }
-		inline const MemoryHeap& heap() const { return _heap; }
 	};
 }

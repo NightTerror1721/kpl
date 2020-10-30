@@ -61,6 +61,7 @@ namespace kpl::runtime
 	RegisterStack::RegisterStack(Size size) :
 		_base{ utils::malloc<Register>(size) },
 		_bottom{ nullptr },
+		_regs{ nullptr },
 		_top{ nullptr }
 	{}
 
@@ -124,49 +125,21 @@ namespace kpl::runtime
 		*_bottom = self;
 	}
 
-	void RegisterStack::push_params(const Parameters& params, unsigned int args)
+	void RegisterStack::push_args(const CallArguments& args, unsigned int max_args)
 	{
-		const auto& v = params.vector();
-		auto it = v.begin();
-		const auto& end = v.end();
-		for (unsigned int i = 0; i < args && it != end; ++i)
-			_regs[i] = **it;
+		if (args)
+		{
+			const Value* args_data = args.data();
+			const Size len = args.size();
+			for (Offset i = 0; i < max_args && i < len; ++i)
+				_regs[i] = args_data[i];
+		}
 	}
 
 	void RegisterStack::close()
 	{
 		for (Register* r = _bottom; r <= _top; ++r)
 			r->invalidate();
-	}
-}
-
-
-
-namespace kpl::runtime
-{
-	Parameters::Parameters(const std::initializer_list<ConstWeakValueReference> pars) :
-		_pars{ pars.size() }
-	{
-		for (const Value& par : pars)
-			_pars.push_back(&par);
-	}
-
-	Parameters& Parameters::_ensure(Size size)
-	{
-		if (_pars.size() < size)
-			_pars.resize(size, &type::literal::Null);
-		return *this;
-	}
-
-	void Parameters::fill(unsigned int size, const Value& value)
-	{
-		_ensure(size);
-		std::fill_n(_pars.begin(), size, &value);
-	}
-	void Parameters::fill(unsigned int from, unsigned int to, const Value& value)
-	{
-		_ensure(to);
-		std::fill_n(_pars.begin() + from, to - from, &value);
 	}
 }
 
@@ -182,11 +155,15 @@ namespace kpl::runtime
 
 		Function* function;
 		Chunk* chunk;
+
+		Value* ret_value;
+		bool end;
 	};
 
 
 
-#define end_inst goto execute_instruction
+#define end_inst goto next_instruction
+#define to_end goto runtime_end
 
 #define A __KPL_INST_ARG_A(runtime.inst)
 #define B __KPL_INST_ARG_B(runtime.inst)
@@ -206,39 +183,54 @@ namespace kpl::runtime
 
 #define Kst(_Index) runtime.chunk->constant(_Index)
 
-#define RK(_Index, _KstTest) (_KstTest ? R(_Index) : Kst(_Index))
+#define RK(_Index, _KstTest) (_KstTest ? Kst(_Index) : R(_Index))
 #define RKB RK(B, KB)
 #define RKC RK(C, KC)
 
 
-	static inline void end_call(RuntimeState& runtime, CallStack& calls, RegisterStack& regs)
+	static inline bool end_call(RuntimeState& runtime, CallStack& calls, RegisterStack& regs, const Register* ret_reg)
 	{
 		CallInfo* info = calls.top();
 		runtime.function = info->function;
-		runtime.chunk = &runtime.function->chunk();
+		runtime.chunk = runtime.function ? &runtime.function->chunk() : nullptr;
 		runtime.inst_offset = info->instruction;
+		if (runtime.end = !runtime.function)
+		{
+			if (ret_reg)
+				*runtime.ret_value = *ret_reg;
+			else *runtime.ret_value = nullptr;
+		}
 
 		regs.close();
 		regs.set(*info);
 		calls.pop();
+
+		return runtime.end;
 	}
 
-	void execute(KPLState& state, Function& function, const Parameters& args)
+	Value execute(KPLState& state, Function& function, const Value& self, const CallArguments& args)
 	{
+		Value ret_value;
 		RuntimeState runtime;
 		state._calls.push_native();
-		state._regs.set(function, args.self());
+		state._regs.set(function, self);
 
 		runtime.chunk = &function.chunk();
 		runtime.function = &function;
 		runtime.inst_offset = 0;
+		runtime.ret_value = &ret_value;
+		runtime.end = false;
 
-		if (args)
-			state._regs.push_params(args, runtime.chunk->register_count());
-		state._regs.set_self(args.self());
+		state._regs.push_args(args, runtime.chunk->register_count());
+		state._regs.set_self(self);
 
-		execute_instruction:
-		switch (__KPL_INST_ARG_OPCODE(runtime.inst = runtime.chunk->instruction(runtime.inst_offset++)))
+	next_instruction:
+		runtime.inst = runtime.chunk->instruction(runtime.inst_offset++);
+
+	exec_instruction:
+		std::cout << static_cast<inst::Instruction>(runtime.inst) << std::endl;
+
+		switch (__KPL_INST_ARG_OPCODE(runtime.inst))
 		{
 			case opcode::id::NOP:
 				end_inst;
@@ -329,12 +321,130 @@ namespace kpl::runtime
 				REGS.write(A, REGS.self());
 				end_inst;
 
+			case opcode::id::ADD:
+				R(A) = RKB.runtime_add(RKC, state);
+				end_inst;
 
+			case opcode::id::SUB:
+				R(A) = RKB.runtime_sub(RKC, state);
+				end_inst;
 
+			case opcode::id::MUL:
+				R(A) = RKB.runtime_mul(RKC, state);
+				end_inst;
 
+			case opcode::id::DIV:
+				R(A) = RKB.runtime_div(RKC, state);
+				end_inst;
+
+			case opcode::id::IDIV:
+				R(A) = RKB.runtime_idiv(RKC, state);
+				end_inst;
+
+			case opcode::id::MOD:
+				R(A) = RKB.runtime_mod(RKC, state);
+				end_inst;
+
+			case opcode::id::EQ:
+				if (RKB.runtime_eq(RKC, state).to_bool())
+					++runtime.inst_offset;
+				end_inst;
+
+			case opcode::id::NE:
+				if (RKB.runtime_ne(RKC, state).to_bool())
+					++runtime.inst_offset;
+				end_inst;
+
+			case opcode::id::GR:
+				if (RKB.runtime_gr(RKC, state).to_bool())
+					++runtime.inst_offset;
+				end_inst;
+
+			case opcode::id::LS:
+				if (RKB.runtime_ls(RKC, state).to_bool())
+					++runtime.inst_offset;
+				end_inst;
+
+			case opcode::id::GE:
+				if (RKB.runtime_ge(RKC, state).to_bool())
+					++runtime.inst_offset;
+				end_inst;
+
+			case opcode::id::LE:
+				if (RKB.runtime_le(RKC, state).to_bool())
+					++runtime.inst_offset;
+				end_inst;
+
+			case opcode::id::SHL:
+				R(A) = RKB.runtime_shl(RKC, state);
+				end_inst;
+
+			case opcode::id::SHR:
+				R(A) = RKB.runtime_shr(RKC, state);
+				end_inst;
+
+			case opcode::id::BAND:
+				R(A) = RKB.runtime_band(RKC, state);
+				end_inst;
+
+			case opcode::id::BOR:
+				R(A) = RKB.runtime_bor(RKC, state);
+				end_inst;
+
+			case opcode::id::XOR:
+				R(A) = RKB.runtime_xor(RKC, state);
+				end_inst;
+
+			case opcode::id::BNOT:
+				R(A) = RKB.runtime_bnot(state);
+				end_inst;
+
+			case opcode::id::NOT:
+				R(A) = RKB.runtime_not(state);
+				end_inst;
+
+			case opcode::id::NEG:
+				R(A) = RKB.runtime_neg(state);
+				end_inst;
+
+			case opcode::id::LEN:
+				R(A) = RKB.runtime_length(state);
+				end_inst;
+
+			case opcode::id::IN:
+				R(A) = RKB.runtime_in(RKC, state);
+				end_inst;
+
+			case opcode::id::INSTANCEOF:
+				R(A) = RKB.runtime_instanceof(RKC, state);
+				end_inst;
+
+			case opcode::id::GET:
+				R(A) = RKB.runtime_subscrived_get(RKC, state);
+				end_inst;
+
+			case opcode::id::SET:
+				R(A).runtime_subscrived_set(RKB, RKC, state);
+				end_inst;
+
+			case opcode::id::JP:
+				runtime.inst_offset = Ax;
+				runtime.inst = runtime.chunk->instruction(runtime.inst_offset);
+				goto exec_instruction;
+
+			case opcode::id::TEST:
+				if (RKB.to_bool() == static_cast<bool>(B))
+					runtime.inst_offset++;
+				end_inst;
+
+			case opcode::id::TEST_SET:
+				if (RKB.to_bool() == static_cast<bool>(B))
+					runtime.inst_offset++;
+				else R(A) = RKB;
+				end_inst;
 
 			case opcode::id::CALL: {
-				const Value& callable = R(A);
+				Value& callable = R(A);
 				if (callable.type() == DataType::Function)
 				{
 					state._calls.push(state._regs, *runtime.function, runtime.inst_offset);
@@ -347,22 +457,25 @@ namespace kpl::runtime
 				}
 				else
 				{
-					callable.runtime_call(state, { (&callable + 1), B });
+					callable.runtime_call(state, type::literal::Null, { (&callable + 1), B });
 				}
 			} end_inst;
 
 			case opcode::id::INVOKE: {
-				const Value& object = R(A);
-				object.runtime_invoke(state, RKB, { (&object + 1), C });
+				Value& object = R(A);
+				object.invoke(state, RKB, { (&object + 1), C });
 			} end_inst;
 
 			case opcode::id::RETURN:
 				if (A)
 					REGS.write(0, RKB);
 				else REGS.reg(0) = nullptr;
-				end_call(runtime, state._calls, state._regs);
+				if (end_call(runtime, state._calls, state._regs, &R(0)))
+					to_end;
 				end_inst;
-
 		}
+
+		runtime_end:
+		return ret_value;
 	}
 }

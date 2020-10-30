@@ -199,3 +199,55 @@ namespace kpl::utils
 		friend std::strong_ordering operator<=> (_Ty left, const RangedInt& right) { return right._value <=> static_cast<Int64>(left); }
 	};
 }
+
+namespace kpl
+{
+	class WeakValueReference
+	{
+	private:
+		Value* _value;
+
+	public:
+		WeakValueReference() = default;
+		WeakValueReference(const WeakValueReference&) = default;
+		WeakValueReference(WeakValueReference&&) noexcept = default;
+		~WeakValueReference() = default;
+
+		WeakValueReference& operator= (const WeakValueReference&) = default;
+		WeakValueReference& operator= (WeakValueReference&&) noexcept = default;
+
+		inline WeakValueReference(Value& value) : _value{ &value } {}
+
+		inline WeakValueReference& operator= (Value& right) { return _value = &right, *this; }
+
+		inline operator Value& () const { return *_value; }
+		inline operator const Value& () const { return *_value; }
+
+		inline Value* operator-> () const { return _value; }
+	};
+
+	class ConstWeakValueReference
+	{
+	private:
+		const Value* _value;
+
+	public:
+		ConstWeakValueReference() = default;
+		ConstWeakValueReference(const ConstWeakValueReference&) = default;
+		ConstWeakValueReference(ConstWeakValueReference&&) noexcept = default;
+		~ConstWeakValueReference() = default;
+
+		ConstWeakValueReference& operator= (const ConstWeakValueReference&) = default;
+		ConstWeakValueReference& operator= (ConstWeakValueReference&&) noexcept = default;
+
+		inline ConstWeakValueReference(Value& value) : _value{ &value } {}
+		inline ConstWeakValueReference(const Value& value) : _value{ &value } {}
+
+		inline ConstWeakValueReference& operator= (Value& right) { return _value = &right, *this; }
+		inline ConstWeakValueReference& operator= (const Value& right) { return _value = &right, *this; }
+
+		inline operator const Value& () const { return *_value; }
+
+		inline const Value* operator-> () const { return _value; }
+	};
+}

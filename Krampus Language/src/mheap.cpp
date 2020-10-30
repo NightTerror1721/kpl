@@ -95,6 +95,13 @@ namespace kpl
 			return construct(block, type::String, str);
 		else return construct(block, type::String);
 	}
+	type::String* MemoryHeap::make_string(const char* str, Size count)
+	{
+		MemoryBlock* block = instanceof(type::String, &type::String::_mheap_delete);
+		if (str && count > 0)
+			return construct(block, type::String, str, count);
+		else return construct(block, type::String);
+	}
 	type::String* MemoryHeap::make_string(const std::string& str)
 	{
 		MemoryBlock* block = instanceof(type::String , &type::String::_mheap_delete);

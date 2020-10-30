@@ -11,6 +11,9 @@ using namespace kpl::inst;
 
 static constexpr int size = sizeof(kpl::MemoryBlock);
 
+std::vector<ChunkConstant> program_consts();
+InstructionList program_code();
+
 int main(int argc, char** argv)
 {
 	MemoryHeap heap;
@@ -21,20 +24,36 @@ int main(int argc, char** argv)
 
 	KPLState state;
 
-	InstructionList insts;
-	insts << Instruction::load_k(0, 0) << Instruction::load_int(1, 256);
+	InstructionList insts = program_code();
 
 	Chunk chunk;
 	chunk.builder()
 		.registers(2)
 		.chunks({})
-		.constants({ Value("hello world") })
+		.constants(program_consts())
 		.instructions(insts)
 		.build();
 
 	type::Function func(chunk);
-	runtime::execute(state, func);
-
+	Value result = runtime::execute(state, func, type::literal::Null);
+	std::cout << result.to_string() << std::endl;
 
 	return 0;
+}
+
+std::vector<ChunkConstant> program_consts()
+{
+	return {
+		256LL,
+		"Hello World"
+	};
+}
+
+InstructionList program_code()
+{
+	InstructionList inst;
+	return inst
+		//<< Instruction::add(0, -1, -1)
+		<< Instruction::load_k(0, 1)
+		<< Instruction::return_(true, -2);
 }

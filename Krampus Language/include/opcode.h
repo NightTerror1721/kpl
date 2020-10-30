@@ -23,9 +23,34 @@ namespace kpl::opcode
 		NEW_OBJECT,	// A KB C
 		SET_AL,		// A B C
 		SELF,		// A
-
-
-
+		ADD,		// A KB KC
+		SUB,		// A KB KC
+		MUL,		// A KB KC
+		DIV,		// A KB KC
+		IDIV,		// A KB KC
+		MOD,		// A KB KC
+		EQ,			// KB KC
+		NE,			// KB KC
+		GR,			// KB KC
+		LS,			// KB KC
+		GE,			// KB KC
+		LE,			// KB KC
+		SHL,		// KB KC
+		SHR,		// KB KC
+		BAND,		// A KB KC
+		BOR,		// A KB KC
+		XOR,		// A KB KC
+		BNOT,		// A KB
+		NOT,		// A KB
+		NEG,		// A KB
+		LEN,		// A KB
+		IN,			// A KB KC
+		INSTANCEOF,	// A KB KC
+		GET,		// A KB KC
+		SET,		// A KB KC
+		JP,			// Ax
+		TEST,		// KB C
+		TEST_SET,	// A KB C
 		CALL,		// A B
 		INVOKE,		// A KB C
 		RETURN,		// A KB

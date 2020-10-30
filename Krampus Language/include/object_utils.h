@@ -24,13 +24,18 @@ namespace kpl::obj::special_property
 	static constexpr const char* operator_bor = "__bor__";
 	static constexpr const char* operator_bnot = "__bnot__";
 
+	static constexpr const char* operator_len = "__len__";
 	static constexpr const char* operator_not = "__not__";
 	static constexpr const char* operator_neg = "__neg__";
 	static constexpr const char* operator_xor = "__xor__";
 
+	static constexpr const char* operator_in = "__in__";
+
 	static constexpr const char* operator_get = "__get__";
 	static constexpr const char* operator_set = "__set__";
 
+	static constexpr const char* operator_call = "__call__";
 
-	static constexpr const char* constructor = "__constructor__";
+
+	static constexpr const char* constructor = "constructor";
 }

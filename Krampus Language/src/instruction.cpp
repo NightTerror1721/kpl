@@ -2,6 +2,20 @@
 
 namespace kpl::inst
 {
+	std::ostream& Instruction::dump(std::ostream& os) const
+	{
+		return os << "[a: " << a()
+			<< "; b: " << b()
+			<< "; c: " << c()
+			<< "; kb: " << kb()
+			<< "; kc: " << kc()
+			<< "; bx: " << bx()
+			<< "; sbx: " << sbx()
+			<< "; ax: " << ax()
+			<< "; sax: " << sax()
+			<< "]";
+	}
+
 	Instruction& Instruction::b(int value)
 	{
 		if (value >= 0)
@@ -72,10 +86,10 @@ namespace kpl::inst
 		if (reset)
 			_destroy();
 
-		for (const Node* node = list._front(); node != &_ghost; node = node->next)
+		for (const Node* node = list._front(); node != &list._ghost; node = node->next)
 		{
 			Node* newnode = new Node{ *node };
-			if (!_ghost.next)
+			if (_ghost.next == &_ghost)
 			{
 				newnode->next = &_ghost;
 				newnode->prev = &_ghost;
@@ -113,7 +127,8 @@ namespace kpl::inst
 
 	InstructionList::operator std::vector<Instruction>() const
 	{
-		std::vector<Instruction> v{ _size };
+		std::vector<Instruction> v;
+		v.reserve(_size);
 		for (const Node* node = _front(); node != &_ghost; node = node->next)
 			v.push_back(node->instruction);
 
@@ -298,4 +313,9 @@ namespace kpl::inst
 
 	bool InstructionList::iterator::operator== (const const_iterator& right) const { return _node == right._node; }
 	bool InstructionList::iterator::operator!= (const const_iterator& right) const { return _node != right._node; }
+}
+
+std::ostream& operator<< (std::ostream& left, const kpl::inst::Instruction& right)
+{
+	return right.dump(left);
 }

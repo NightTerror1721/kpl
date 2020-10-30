@@ -83,17 +83,16 @@ namespace kpl
 		MemoryHeap();
 		~MemoryHeap();
 
-		MemoryBlock* malloc(Size size, void (*destructor)(void*) = nullptr);
-
-		void free(MemoryBlock* block);
-
 		void garbage_collector();
 
 	private:
+		MemoryBlock* malloc(Size size, void (*destructor)(void*) = nullptr);
+		void free(MemoryBlock* block);
 		void delete_block(MemoryBlock* block);
 
 	public:
 		type::String* make_string(const char* str = nullptr);
+		type::String* make_string(const char* str, Size count);
 		type::String* make_string(const std::string& str);
 
 		type::Array* make_array(Size length);
