@@ -146,9 +146,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\asm_parser.cpp" />
+    <ClCompile Include="src\bytebuffer.cpp" />
     <ClCompile Include="src\chunk.cpp" />
     <ClCompile Include="src\data_types.cpp" />
     <ClCompile Include="src\instruction.cpp" />
+    <ClCompile Include="src\iodata.cpp" />
     <ClCompile Include="src\kplstate.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mheap.cpp" />
@@ -157,10 +160,13 @@
     <ClCompile Include="src\runtime.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\asm_parser.h" />
+    <ClInclude Include="include\bytebuffer.h" />
     <ClInclude Include="include\chunk.h" />
     <ClInclude Include="include\common.h" />
     <ClInclude Include="include\data_types.h" />
     <ClInclude Include="include\instruction.h" />
+    <ClInclude Include="include\iodata.h" />
     <ClInclude Include="include\kplstate.h" />
     <ClInclude Include="include\mheap.h" />
     <ClInclude Include="include\object_utils.h" />

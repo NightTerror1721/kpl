@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <map>
 
 #ifndef __cpp_lib_concepts
 #define __cpp_lib_concepts
@@ -141,6 +142,52 @@ namespace kpl::utils
 			return std::min(max, std::max(static_cast<_ValueTy>(min), value));
 		else return std::min(static_cast<_ValueTy>(max), std::max(static_cast<_ValueTy>(min), value));
 	}
+
+
+	template<typename _Ty>
+	inline _Ty* arraycopy_raw(_Ty** dst, const void* src, Size size)
+	{
+		_Ty* array = utils::malloc<_Ty>(size);
+		std::memcpy(array, src, size);
+		return dst ? (*dst = array) : array;
+	}
+
+	template<typename _Ty>
+	inline _Ty* arraycopy_raw(const void* src, Size size) { return arraycopy_raw<_Ty>(nullptr, src, size); }
+
+	template<typename _Ty>
+	_Ty* arraycopy(_Ty** dst, const _Ty* src, Size size)
+	{
+		_Ty* array = utils::malloc<_Ty>(size * sizeof(_Ty));
+		const _Ty* s_ptr = src, * end = src + size;
+
+		for (_Ty* d_ptr = array; s_ptr < end; ++s_ptr, ++d_ptr)
+			construct_copy<_Ty>(*d_ptr, *s_ptr);
+
+		if (dst)
+			*dst = array;
+		return array;
+	}
+
+	template<typename _Ty>
+	inline _Ty* arraycopy(const _Ty* src, Size size) { return arraycopy<_Ty>(nullptr, src, size); }
+
+	template<typename _Ty>
+	_Ty* arraymove(_Ty** dst, _Ty* src, Size size)
+	{
+		_Ty* array = malloc_raw<_Ty>(size * sizeof(_Ty));
+		const _Ty* end = src + size;
+
+		for (_Ty* d_ptr = array, *s_ptr = src; s_ptr < end; ++s_ptr, ++d_ptr)
+			move<_Ty>(*d_ptr, std::move<_Ty>(*s_ptr));
+
+		if (dst)
+			*dst = array;
+		return array;
+	}
+
+	template<typename _Ty>
+	inline _Ty* arraymove(_Ty* src, Size size) { return arraymove<_Ty>(nullptr, src, size); }
 }
 
 
@@ -197,6 +244,36 @@ namespace kpl::utils
 		friend std::strong_ordering operator<=> (const RangedInt& left, _Ty right) { return left._value <=> static_cast<Int64>(right); }
 		template<std::integral _Ty>
 		friend std::strong_ordering operator<=> (_Ty left, const RangedInt& right) { return right._value <=> static_cast<Int64>(left); }
+	};
+}
+
+namespace kpl::utils
+{
+	template<typename _Ty>
+	class EnumDict
+	{
+	private:
+		std::map<std::string, _Ty> _map;
+
+	public:
+		EnumDict(const char* (*names_func)(_Ty), _Ty first, _Ty last) :
+			_map{}
+		{
+			int imin = std::min(static_cast<int>(first), static_cast<int>(last));
+			int imax = std::max(static_cast<int>(first), static_cast<int>(last));
+
+			for (int i = imin; i <= imax; ++i)
+			{
+				const char* name = names_func(static_cast<_Ty>(i));
+				_map.insert({ std::string(name), static_cast<_Ty>(i) });
+			}
+		}
+
+		bool has(const char* name) const { return _map.find(std::string(name)) != _map.end(); }
+		bool has(const std::string& name) const { return _map.find(name) != _map.end(); }
+
+		_Ty operator[] (const char* name) const { return _map.at(std::string(name)); }
+		_Ty operator[] (const std::string& name) const { return _map.at(name); }
 	};
 }
 

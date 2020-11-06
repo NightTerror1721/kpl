@@ -182,7 +182,7 @@ namespace kpl::utils
 
 	template<typename _Ty>
 	StaticArray<_Ty>::StaticArray(Size size) :
-		_elems{ utils::malloc_raw<_Ty>(sizeof(_Ty) * size) },
+		_elems{ utils::malloc<_Ty>(sizeof(_Ty) * size) },
 		_size{ size }
 	{}
 
@@ -279,7 +279,7 @@ namespace kpl::utils
 		_reconstruct(old_size + size, false);
 
 		std::memcpy(_elems, old, sizeof(_Ty) * old_size);
-		utils::free_raw(old);
+		utils::free(old);
 
 		_Ty* ptr = _elems + old_size;
 		if (move)
